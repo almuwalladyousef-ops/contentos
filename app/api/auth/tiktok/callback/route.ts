@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   })
 
   const tokenData = await tokenRes.json()
-  const accessToken = tokenData.data?.access_token
+  const accessToken = tokenData.access_token ?? tokenData.data?.access_token
 
   if (!accessToken) {
     const errMsg = encodeURIComponent(JSON.stringify(tokenData))
