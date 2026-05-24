@@ -29,6 +29,7 @@ function SettingsContent() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [disconnecting, setDisconnecting] = useState(false)
+  const [showSecrets, setShowSecrets] = useState(false)
 
   const ttConnected = searchParams.get('tt_connected') === '1'
   const ttError = searchParams.get('tt_error')
@@ -112,7 +113,15 @@ function SettingsContent() {
     <div className="max-w-2xl mx-auto w-full">
       <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-lg mb-8">
         <div className="p-6 sm:p-8">
-          <h1 className="text-2xl font-bold text-text mb-6">Settings</h1>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-text">Settings</h1>
+            <button
+              onClick={() => setShowSecrets(s => !s)}
+              className="text-xs font-semibold text-text-muted hover:text-text border border-border rounded-lg px-3 py-1.5 transition-colors"
+            >
+              {showSecrets ? 'Hide' : 'Show'} keys
+            </button>
+          </div>
 
           {/* Slot Toggle */}
           <div className="flex gap-2 p-1 bg-surface2 rounded-xl border border-border mb-8">
@@ -208,7 +217,7 @@ function SettingsContent() {
                 <div>
                   <label className="block text-text text-sm font-semibold mb-2">Access Token</label>
                   <input
-                    type="password"
+                    type={showSecrets ? 'text' : 'password'}
                     value={creds.ig_access_token ?? ''}
                     onChange={e => setCred('ig_access_token', e.target.value)}
                     placeholder="Paste access token..."
@@ -235,7 +244,7 @@ function SettingsContent() {
               <div className="text-text-muted text-xs font-bold mb-4 tracking-wider uppercase">Groq</div>
               <label className="block text-text text-sm font-semibold mb-2">API Key</label>
               <input
-                type="password"
+                type={showSecrets ? 'text' : 'password'}
                 value={creds.groq_api_key ?? ''}
                 onChange={e => setCred('groq_api_key', e.target.value)}
                 placeholder="Paste API key..."
@@ -250,7 +259,7 @@ function SettingsContent() {
               <div className="text-text-muted text-xs font-bold mb-4 tracking-wider uppercase">Gemini</div>
               <label className="block text-text text-sm font-semibold mb-2">API Key</label>
               <input
-                type="password"
+                type={showSecrets ? 'text' : 'password'}
                 value={creds.gemini_api_key ?? ''}
                 onChange={e => setCred('gemini_api_key', e.target.value)}
                 placeholder="Paste API key..."
