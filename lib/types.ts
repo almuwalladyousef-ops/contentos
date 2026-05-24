@@ -38,11 +38,11 @@ export interface VideoAnalysis {
 }
 
 export interface Credentials {
-  ig_access_token: string
-  ig_account_id: string
-  tt_access_token: string
-  groq_api_key: string
-  gemini_api_key: string
+  ig_access_token?: string
+  ig_account_id?: string
+  tt_access_token?: string
+  groq_api_key?: string
+  gemini_api_key?: string
 }
 
 export type PostStatus = 'idle' | 'uploading' | 'success' | 'failed' | 'skipped'
