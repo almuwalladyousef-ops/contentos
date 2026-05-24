@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
+import { getPersonalAccount, AccountSlot } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
+  const slot = (searchParams.get('state') ?? 'personal') as AccountSlot
   const base = process.env.NEXTAUTH_URL!
 
   if (error || !code) {
     return NextResponse.redirect(`${base}/settings?tt_error=${error ?? 'no_code'}`)
   }
 
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
+  const account = await getPersonalAccount()
   if (!account) {
     return NextResponse.redirect(`${base}/settings?tt_error=no_account`)
   }
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { rootId } = await ensureFolderStructure(account.accessToken)
-  const existing = await getCredentials(account.accessToken, status.active) ?? {}
-  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken }, status.active)
+  const existing = await getCredentials(account.accessToken, slot) ?? {}
+  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken }, slot)
 
-  return NextResponse.redirect(`${base}/settings?tt_connected=1`)
+  return NextResponse.redirect(`${base}/settings?tt_connected=1&slot=${slot}`)
 }

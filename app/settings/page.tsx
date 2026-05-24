@@ -152,7 +152,7 @@ function SettingsContent() {
                 </span>
               </div>
               <a
-                href="/api/auth/tiktok/connect"
+                href={`/api/auth/tiktok/connect?slot=${accountStatus?.active ?? 'personal'}`}
                 className="block w-full text-center py-2 rounded-lg text-xs font-semibold transition-colors border border-border bg-bg hover:bg-surface2 text-text"
               >
                 {values.tt_access_token ? 'Reconnect TikTok' : 'Connect TikTok'}

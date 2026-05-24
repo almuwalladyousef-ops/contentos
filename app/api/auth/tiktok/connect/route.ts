@@ -1,15 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
-  const clientKey = process.env.TIKTOK_CLIENT_KEY!
+export async function GET(req: NextRequest) {
+  const slot = req.nextUrl.searchParams.get('slot') ?? 'personal'
   const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/tiktok/callback`
 
   const params = new URLSearchParams({
-    client_key: clientKey,
+    client_key: process.env.TIKTOK_CLIENT_KEY!,
     scope: 'video.publish,video.upload,user.info.basic',
     response_type: 'code',
     redirect_uri: redirectUri,
-    state: 'tiktok_connect',
+    state: slot,
   })
 
   return NextResponse.redirect(`https://www.tiktok.com/v2/auth/authorize/?${params}`)
