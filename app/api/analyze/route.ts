@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getActiveAccount } from '@/lib/accounts'
+import { getPersonalAccount } from '@/lib/accounts'
 import { analyzeTranscript } from '@/lib/gemini'
 import { getCredentials } from '@/lib/drive'
 
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
-  const account = await getActiveAccount()
+  const account = await getPersonalAccount()
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {

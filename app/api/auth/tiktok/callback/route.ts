@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getActiveAccount } from '@/lib/accounts'
+import { getPersonalAccount } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${base}/settings?tt_error=${error ?? 'no_code'}`)
   }
 
-  const account = await getActiveAccount()
+  const account = await getPersonalAccount()
   if (!account) {
     return NextResponse.redirect(`${base}/settings?tt_error=no_account`)
   }

@@ -28,13 +28,13 @@ export async function GET(req: NextRequest) {
   })
   const user = await userRes.json()
 
-  saveAccount(slot, {
+  await saveAccount(slot, {
     email: user.email,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600),
   })
-  switchAccount(slot)
+  await switchAccount(slot)
 
   return NextResponse.redirect(new URL('/settings', req.url))
 }

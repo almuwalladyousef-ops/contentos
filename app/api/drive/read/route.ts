@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getActiveAccount } from '@/lib/accounts'
+import { getPersonalAccount } from '@/lib/accounts'
 import { getDriveClient } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
-  const account = await getActiveAccount()
+  const account = await getPersonalAccount()
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   const fileId = req.nextUrl.searchParams.get('fileId')

@@ -87,10 +87,9 @@ async function refreshAccessToken(account: StoredAccount): Promise<StoredAccount
   }
 }
 
-export async function getActiveAccount(): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
+async function getAccountBySlot(slot: AccountSlot): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
   const jar = await cookies()
-  const active = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
-  const val = jar.get(`cms_${active}`)?.value
+  const val = jar.get(`cms_${slot}`)?.value
   if (!val) return null
 
   try {
@@ -98,11 +97,21 @@ export async function getActiveAccount(): Promise<{ accessToken: string; email: 
 
     if (account.expires_at - Math.floor(Date.now() / 1000) < 300) {
       account = await refreshAccessToken(account)
-      jar.set(`cms_${active}`, encrypt(JSON.stringify(account)), COOKIE_OPTS)
+      jar.set(`cms_${slot}`, encrypt(JSON.stringify(account)), COOKIE_OPTS)
     }
 
-    return { accessToken: account.access_token, email: account.email, slot: active }
+    return { accessToken: account.access_token, email: account.email, slot }
   } catch {
     return null
   }
+}
+
+export async function getActiveAccount(): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
+  const jar = await cookies()
+  const active = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  return getAccountBySlot(active)
+}
+
+export async function getPersonalAccount(): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
+  return getAccountBySlot('personal')
 }

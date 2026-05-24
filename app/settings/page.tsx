@@ -125,7 +125,7 @@ function SettingsContent() {
               })}
             </div>
             <p className="text-text-muted text-xs mt-3 italic">
-              Each account stores its own Drive data and credentials separately. Switch between them using the toggle in the nav bar.
+              All Drive storage (videos, analysis, credentials) always uses the Personal account. The Business slot is only used for YouTube posting.
             </p>
           </div>
 
