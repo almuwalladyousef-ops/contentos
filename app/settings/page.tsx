@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type AccountSlot = 'personal' | 'business'
@@ -20,6 +20,14 @@ const credFields = [
 const sectionOrder = ['INSTAGRAM', 'GROQ', 'GEMINI']
 
 export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
+  )
+}
+
+function SettingsContent() {
   const searchParams = useSearchParams()
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
