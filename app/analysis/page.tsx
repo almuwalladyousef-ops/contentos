@@ -1,7 +1,6 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { useSession } from 'next-auth/react'
 import AnalysisResult from '@/components/AnalysisResult'
 import { VideoAnalysis } from '@/lib/types'
 
@@ -37,7 +36,6 @@ function encodeWAV(audioBuffer: AudioBuffer): Blob {
 }
 
 export default function AnalysisPage() {
-  const { data: session } = useSession()
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState('')
@@ -46,8 +44,6 @@ export default function AnalysisPage() {
   const [error, setError] = useState('')
   const [running, setRunning] = useState(false)
   const [saved, setSaved] = useState(false)
-
-  if (!session) return null
 
   const isLarge = file ? file.size > 25 * 1024 * 1024 : false
 
@@ -132,84 +128,84 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div style={{ maxWidth: '720px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="video/*,audio/*"
-          style={{ display: 'none' }}
-          onChange={e => { setFile(e.target.files?.[0] ?? null); setTranscript(''); setAnalysis(null); setError('') }}
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          style={{ background: '#1e1e1e', border: '1px solid #2a2a2a', color: '#e0e0e0', padding: '8px 14px', fontSize: '12px' }}
-        >
-          [BROWSE]
-        </button>
-        <span style={{ color: file ? '#e0e0e0' : '#555', fontSize: '12px' }}>
-          {file ? file.name : 'no file selected'}
-        </span>
-        {isLarge && (
-          <span style={{ color: '#eab308', fontSize: '11px' }}>large file — audio will be extracted</span>
-        )}
-      </div>
-
-      <button
-        onClick={handleRun}
-        disabled={!file || running}
-        style={{
-          background: '#1e1e1e',
-          border: '1px solid #2a2a2a',
-          color: (!file || running) ? '#555' : '#e0e0e0',
-          padding: '10px 20px',
-          fontSize: '12px',
-          letterSpacing: '0.05em',
-          cursor: (!file || running) ? 'not-allowed' : 'pointer',
-          marginBottom: '24px',
-        }}
-      >
-        {running ? status || 'WORKING...' : '[TRANSCRIBE & ANALYZE]'}
-      </button>
-
-      {error && (
-        <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '16px', padding: '10px', border: '1px solid #ef4444' }}>
-          {error}
-        </div>
-      )}
-
-      {transcript && (
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '11px', color: '#555', marginBottom: '8px', letterSpacing: '0.1em' }}>TRANSCRIPT</div>
-          <textarea
-            readOnly
-            value={transcript}
-            rows={6}
-            style={{ width: '100%', background: '#161616', border: '1px solid #2a2a2a', color: '#e0e0e0', padding: '12px', fontSize: '12px', lineHeight: '1.6' }}
-          />
-        </div>
-      )}
-
-      {analysis && (
-        <>
-          <div style={{ marginBottom: '16px' }}>
-            <AnalysisResult analysis={analysis} />
+    <div className="max-w-3xl mx-auto w-full">
+      <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-lg mb-8">
+        <div className="p-6 sm:p-8">
+          <h1 className="text-2xl font-bold text-text mb-6">Analyze Video Content</h1>
+          
+          <div className="mb-6">
+            <div className="flex items-center gap-4">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*,audio/*"
+                className="hidden"
+                onChange={e => { setFile(e.target.files?.[0] ?? null); setTranscript(''); setAnalysis(null); setError('') }}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="bg-surface2 hover:bg-border text-text font-medium py-2.5 px-5 rounded-lg border border-border transition-colors focus:ring-2 focus:ring-primary focus:outline-none"
+              >
+                Browse Video
+              </button>
+              <span className={`text-sm truncate flex-1 ${file ? 'text-text' : 'text-text-muted italic'}`}>
+                {file ? file.name : 'No file selected'}
+              </span>
+              {isLarge && (
+                <span className="text-yellow text-xs font-semibold px-2 py-1 bg-yellow/10 rounded border border-yellow/20">
+                  Large file — audio will be extracted
+                </span>
+              )}
+            </div>
           </div>
+
           <button
-            onClick={handleSave}
-            style={{
-              background: '#1e1e1e',
-              border: '1px solid #2a2a2a',
-              color: '#e0e0e0',
-              padding: '10px 20px',
-              fontSize: '12px',
-              letterSpacing: '0.05em',
-            }}
+            onClick={handleRun}
+            disabled={!file || running}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 shadow-md mb-6 ${
+              (!file || running)
+                ? 'bg-surface2 text-dim cursor-not-allowed border border-border'
+                : 'bg-primary hover:bg-primary-hover text-white cursor-pointer border border-transparent shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5'
+            }`}
           >
-            {saved ? '✓ SAVED TO DRIVE' : '[SAVE TO DRIVE]'}
+            {running ? (status || 'WORKING...') : 'TRANSCRIBE & ANALYZE'}
           </button>
-        </>
-      )}
+
+          {error && (
+            <div className="bg-red/10 border border-red/30 text-red px-4 py-3 rounded-lg text-sm mb-6">
+              {error}
+            </div>
+          )}
+
+          {transcript && (
+            <div className="mb-8">
+              <div className="text-text-muted text-xs font-semibold mb-3 tracking-wider uppercase">Transcript</div>
+              <textarea
+                readOnly
+                value={transcript}
+                rows={6}
+                className="w-full bg-surface2 border border-border text-text rounded-xl p-4 text-sm leading-relaxed focus:outline-none resize-y"
+              />
+            </div>
+          )}
+
+          {analysis && (
+            <div className="space-y-6">
+              <AnalysisResult analysis={analysis} />
+              <button
+                onClick={handleSave}
+                className={`w-full py-3 rounded-lg font-semibold text-sm transition-colors border ${
+                  saved
+                    ? 'bg-green/10 border-green/30 text-green'
+                    : 'bg-surface2 hover:bg-border border-border text-text'
+                }`}
+              >
+                {saved ? '✓ SAVED TO DRIVE' : 'SAVE TO DRIVE'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

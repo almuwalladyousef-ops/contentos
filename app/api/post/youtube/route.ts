@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { getActiveAccount } from '@/lib/accounts'
 
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const account = await getActiveAccount()
+  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
     const formData = await req.formData()
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.accessToken}`,
+          Authorization: `Bearer ${account.accessToken}`,
           'Content-Type': 'application/json',
           'X-Upload-Content-Type': file.type || 'video/mp4',
           'X-Upload-Content-Length': String(file.size),

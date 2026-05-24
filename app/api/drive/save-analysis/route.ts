@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { getActiveAccount } from '@/lib/accounts'
 import { ensureFolderStructure, writeJsonFile, writeTextFile } from '@/lib/drive'
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const account = await getActiveAccount()
+  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
     const { transcript, analysis, name, timestamp } = await req.json()
-    const { analysisId, transcriptsId } = await ensureFolderStructure(session.accessToken)
+    const { analysisId, transcriptsId } = await ensureFolderStructure(account.accessToken)
 
     const analysisFileId = await writeJsonFile(
-      session.accessToken,
+      account.accessToken,
       analysisId,
       `${name}-${timestamp}-analysis.json`,
       analysis
     )
 
     const transcriptFileId = await writeTextFile(
-      session.accessToken,
+      account.accessToken,
       transcriptsId,
       `${name}-${timestamp}-transcript.txt`,
       transcript

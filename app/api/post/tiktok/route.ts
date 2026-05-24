@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
+import { getActiveAccount } from '@/lib/accounts'
 import { getCredentials } from '@/lib/drive'
 
 export const maxDuration = 300
@@ -7,11 +7,11 @@ export const maxDuration = 300
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const account = await getActiveAccount()
+  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const creds = await getCredentials(session.accessToken)
+    const creds = await getCredentials(account.accessToken)
     if (!creds?.tt_access_token) {
       return NextResponse.json({ error: 'TikTok access token not set in Settings' }, { status: 400 })
     }

@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import React, { useEffect, useState } from 'react'
 import AnalysisResult from '@/components/AnalysisResult'
 import { PostRecord, VideoAnalysis } from '@/lib/types'
 
@@ -12,18 +11,16 @@ const platformTag: Record<string, string> = {
 }
 
 export default function HistoryPage() {
-  const { data: session } = useSession()
   const [history, setHistory] = useState<PostRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [analyses, setAnalyses] = useState<Record<string, VideoAnalysis>>({})
 
   useEffect(() => {
-    if (!session) return
     fetch('/api/history')
       .then(r => r.json())
       .then(data => { setHistory(Array.isArray(data) ? data : []); setLoading(false) })
-  }, [session])
+  }, [])
 
   async function handleClear() {
     if (!confirm('Clear all history? This cannot be undone.')) return
@@ -46,84 +43,94 @@ export default function HistoryPage() {
     }
   }
 
-  if (!session) return null
-
   return (
-    <div style={{ maxWidth: '900px' }}>
+    <div className="max-w-5xl mx-auto w-full">
       {loading ? (
-        <div style={{ color: '#555', fontSize: '12px' }}>loading...</div>
+        <div className="text-text-muted text-sm flex items-center justify-center py-20">Loading...</div>
       ) : history.length === 0 ? (
-        <div style={{ color: '#555', fontSize: '12px' }}>no history yet</div>
+        <div className="text-text-muted text-sm flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-surface2/50">
+          <p className="mb-2">No history yet</p>
+        </div>
       ) : (
-        <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
-                {['DATE', 'VIDEO', 'PLATFORMS', 'CAPTION'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: '#555', fontSize: '11px', letterSpacing: '0.05em', fontWeight: 'normal' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {history.map(entry => (
-                <>
-                  <tr
-                    key={entry.id}
-                    onClick={() => handleExpand(entry)}
-                    style={{
-                      borderBottom: '1px solid #1e1e1e',
-                      cursor: 'pointer',
-                      background: expanded === entry.id ? '#161616' : 'transparent',
-                    }}
-                  >
-                    <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                      {new Date(entry.date).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#e0e0e0', fontSize: '12px' }}>
-                      {entry.video_name}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: '11px' }}>
-                      {entry.platforms.map(p => (
-                        <span key={p} style={{ color: '#555', marginRight: '6px' }}>{platformTag[p]}</span>
-                      ))}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#555', fontSize: '12px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {entry.caption?.slice(0, 80) || '—'}
-                    </td>
-                  </tr>
-                  {expanded === entry.id && (
-                    <tr key={`${entry.id}-expanded`}>
-                      <td colSpan={4} style={{ padding: '16px 12px', background: '#111' }}>
-                        <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                          {entry.youtube_url && (
-                            <a href={entry.youtube_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', fontSize: '12px' }}>YouTube ↗</a>
-                          )}
-                          {entry.instagram_url && (
-                            <a href={entry.instagram_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', fontSize: '12px' }}>Instagram ↗</a>
-                          )}
+        <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-lg mb-8">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface2 border-b border-border">
+                  {['DATE', 'VIDEO', 'PLATFORMS', 'CAPTION'].map(h => (
+                    <th key={h} className="py-4 px-6 text-xs font-semibold text-text-muted tracking-wider uppercase">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {history.map(entry => (
+                  <React.Fragment key={entry.id}>
+                    <tr
+                      onClick={() => handleExpand(entry)}
+                      className={`cursor-pointer transition-colors ${
+                        expanded === entry.id ? 'bg-surface2/80' : 'hover:bg-surface2/50'
+                      }`}
+                    >
+                      <td className="py-4 px-6 text-sm text-text-muted whitespace-nowrap">
+                        {new Date(entry.date).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 px-6 text-sm font-medium text-text">
+                        {entry.video_name}
+                      </td>
+                      <td className="py-4 px-6 text-xs whitespace-nowrap">
+                        <div className="flex gap-2">
+                          {entry.platforms.map(p => (
+                            <span key={p} className="bg-bg border border-border text-text-muted px-2 py-1 rounded-md tracking-wider">
+                              {platformTag[p]}
+                            </span>
+                          ))}
                         </div>
-                        {analyses[entry.id] ? (
-                          <AnalysisResult analysis={analyses[entry.id]} />
-                        ) : entry.analysis_file_id ? (
-                          <div style={{ color: '#555', fontSize: '12px' }}>loading analysis...</div>
-                        ) : (
-                          <div style={{ color: '#555', fontSize: '12px' }}>no analysis saved for this entry</div>
-                        )}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-text-muted max-w-xs truncate">
+                        {entry.caption?.slice(0, 80) || '—'}
                       </td>
                     </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
-
-          <button
-            onClick={handleClear}
-            style={{ background: '#1e1e1e', border: '1px solid #2a2a2a', color: '#ef4444', padding: '8px 16px', fontSize: '12px' }}
-          >
-            [CLEAR HISTORY]
-          </button>
-        </>
+                    {expanded === entry.id && (
+                      <tr key={`${entry.id}-expanded`} className="bg-bg/50">
+                        <td colSpan={4} className="p-6 border-b border-border">
+                          <div className="flex gap-4 mb-6 flex-wrap">
+                            {entry.youtube_url && (
+                              <a href={entry.youtube_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover text-sm font-medium underline underline-offset-2 transition-colors">
+                                YouTube ↗
+                              </a>
+                            )}
+                            {entry.instagram_url && (
+                              <a href={entry.instagram_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover text-sm font-medium underline underline-offset-2 transition-colors">
+                                Instagram ↗
+                              </a>
+                            )}
+                          </div>
+                          {analyses[entry.id] ? (
+                            <AnalysisResult analysis={analyses[entry.id]} />
+                          ) : entry.analysis_file_id ? (
+                            <div className="text-text-muted text-sm animate-pulse">Loading analysis...</div>
+                          ) : (
+                            <div className="text-text-muted text-sm italic">No analysis saved for this entry</div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-6 bg-surface2 border-t border-border flex justify-end">
+            <button
+              onClick={handleClear}
+              className="bg-surface hover:bg-red/10 text-red font-medium py-2 px-4 rounded-lg border border-red/30 transition-colors focus:ring-2 focus:ring-red focus:outline-none text-sm"
+            >
+              Clear History
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

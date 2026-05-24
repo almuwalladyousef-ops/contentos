@@ -3,11 +3,19 @@
 import { PostStatus } from '@/lib/types'
 
 const colors: Record<PostStatus, string> = {
-  idle: '#555555',
-  uploading: '#eab308',
-  success: '#22c55e',
-  failed: '#ef4444',
-  skipped: '#555555',
+  idle: 'bg-dim',
+  uploading: 'bg-yellow animate-pulse shadow-[0_0_8px_var(--color-yellow)]',
+  success: 'bg-green shadow-[0_0_8px_rgba(16,185,129,0.4)]',
+  failed: 'bg-red shadow-[0_0_8px_rgba(239,68,68,0.4)]',
+  skipped: 'bg-dim',
+}
+
+const textColors: Record<PostStatus, string> = {
+  idle: 'text-text-muted',
+  uploading: 'text-yellow',
+  success: 'text-green',
+  failed: 'text-red',
+  skipped: 'text-text-muted',
 }
 
 const labels: Record<PostStatus, string> = {
@@ -26,24 +34,16 @@ interface Props {
 
 export default function StatusDot({ platform, state, message }: Props) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '6px 0' }}>
-      <span style={{ color: '#555', minWidth: '80px', fontSize: '12px', paddingTop: '1px' }}>
-        {platform.toUpperCase()}
+    <div className="flex items-start gap-3 py-2">
+      <span className="text-text-muted min-w-[80px] text-xs pt-1 uppercase font-medium tracking-wider">
+        {platform}
       </span>
-      <span style={{
-        width: '8px',
-        height: '8px',
-        borderRadius: '50%',
-        background: colors[state],
-        flexShrink: 0,
-        marginTop: '4px',
-        boxShadow: state === 'uploading' ? `0 0 6px ${colors[state]}` : 'none',
-      }} />
-      <span style={{
-        color: state === 'failed' ? '#ef4444' : state === 'success' ? '#22c55e' : '#555',
-        fontSize: '12px',
-        wordBreak: 'break-word',
-      }}>
+      <span 
+        className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 transition-all duration-300 ${colors[state]}`}
+      />
+      <span 
+        className={`text-sm break-words font-medium ${textColors[state]}`}
+      >
         {message || labels[state]}
       </span>
     </div>

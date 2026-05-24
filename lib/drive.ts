@@ -4,6 +4,9 @@ import { Credentials } from './types'
 const FOLDER_NAME = 'ContentOS'
 const SUBFOLDERS = ['analysis', 'transcripts', 'temp']
 
+type FolderCache = { rootId: string; analysisId: string; transcriptsId: string; tempId: string }
+const folderCache = new Map<string, FolderCache>()
+
 export function getDriveClient(accessToken: string) {
   const auth = new google.auth.OAuth2()
   auth.setCredentials({ access_token: accessToken })
@@ -16,6 +19,9 @@ export async function ensureFolderStructure(accessToken: string): Promise<{
   transcriptsId: string
   tempId: string
 }> {
+  const cached = folderCache.get(accessToken)
+  if (cached) return cached
+
   const drive = getDriveClient(accessToken)
 
   // Find or create root ContentOS folder
@@ -65,7 +71,9 @@ export async function ensureFolderStructure(accessToken: string): Promise<{
     })
   }
 
-  return { rootId, analysisId: ids.analysis, transcriptsId: ids.transcripts, tempId: ids.temp }
+  const result = { rootId, analysisId: ids.analysis, transcriptsId: ids.transcripts, tempId: ids.temp }
+  folderCache.set(accessToken, result)
+  return result
 }
 
 export async function readJsonFile<T>(accessToken: string, folderId: string, filename: string): Promise<T | null> {

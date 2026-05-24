@@ -1,55 +1,73 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-bg: #0d0d0d;
-  --color-surface: #161616;
-  --color-surface2: #1e1e1e;
-  --color-border: #2a2a2a;
-  --color-text: #e0e0e0;
-  --color-dim: #555555;
-  --color-green: #22c55e;
+  --color-bg: #0b0f19;
+  --color-surface: #1e293b;
+  --color-surface2: #334155;
+  --color-border: #475569;
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-dim: #64748b;
+  
+  /* Vibrant modern colors */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-green: #10b981;
   --color-red: #ef4444;
-  --color-yellow: #eab308;
+  --color-yellow: #f59e0b;
   --color-blue: #3b82f6;
-  --font-mono: 'Courier New', Menlo, Monaco, monospace;
+  
+  --font-sans: var(--font-inter);
 }
 
-* {
-  box-sizing: border-box;
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    background: linear-gradient(135deg, #0b0f19 0%, #1e293b 100%);
+    color: var(--color-text);
+    font-family: var(--font-sans), sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-body {
-  background: #0d0d0d;
-  color: #e0e0e0;
-  font-family: 'Courier New', Menlo, Monaco, monospace;
-  font-size: 13px;
-  min-height: 100vh;
-}
+  input, textarea, select, button {
+    font-family: inherit;
+    font-size: inherit;
+  }
 
-input, textarea, select, button {
-  font-family: 'Courier New', Menlo, Monaco, monospace;
-  font-size: 13px;
-}
+  input, textarea {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    width: 100%;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+  }
 
-input, textarea {
-  background: #1e1e1e;
-  border: 1px solid #2a2a2a;
-  color: #e0e0e0;
-  padding: 8px 10px;
-  border-radius: 2px;
-  outline: none;
-  width: 100%;
-}
+  input:focus, textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  }
 
-input:focus, textarea:focus {
-  border-color: #555555;
-}
+  input::placeholder, textarea::placeholder {
+    color: var(--color-dim);
+  }
 
-button {
-  cursor: pointer;
-  border-radius: 2px;
-}
+  button {
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
 
-textarea {
-  resize: vertical;
+  textarea {
+    resize: vertical;
+  }
 }

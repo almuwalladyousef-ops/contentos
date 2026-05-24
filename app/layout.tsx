@@ -1,26 +1,27 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import Nav from '@/components/Nav'
-import SessionProvider from '@/components/SessionProvider'
-import { auth } from '@/auth'
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'ContentOS',
   description: 'Post and analyze your videos',
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth()
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <SessionProvider session={session}>
-          {session && <Nav />}
-          <main style={{ flex: 1, padding: session ? '32px 24px' : '0' }}>
-            {children}
-          </main>
-        </SessionProvider>
+    <html lang="en" className={`${inter.variable}`}>
+      <body className="min-h-screen flex flex-col font-sans bg-bg text-text selection:bg-primary/20">
+        <Nav />
+        <main className="flex-1 p-6 md:p-8 lg:p-10 max-w-7xl mx-auto w-full">
+          {children}
+        </main>
       </body>
     </html>
   )
