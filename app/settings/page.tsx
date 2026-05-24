@@ -31,19 +31,45 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
+  const [ttTokens, setTtTokens] = useState<{ personal: string; business: string }>({ personal: '', business: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [disconnecting, setDisconnecting] = useState<AccountSlot | null>(null)
 
   const ttConnected = searchParams.get('tt_connected') === '1'
   const ttError = searchParams.get('tt_error')
 
   useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(setAccountStatus).catch(() => {})
-    fetch('/api/drive/credentials')
+    fetch('/api/drive/credentials?slot=all')
       .then(r => r.json())
-      .then(data => { if (data && !data.error) setValues(data) })
+      .then(data => {
+        if (data && !data.error) {
+          const active = data[accountStatus?.active ?? 'personal'] ?? {}
+          setValues(active)
+          setTtTokens({
+            personal: data.personal?.tt_access_token ?? '',
+            business: data.business?.tt_access_token ?? '',
+          })
+        }
+      })
   }, [])
+
+  useEffect(() => {
+    if (!accountStatus) return
+    fetch('/api/drive/credentials?slot=all')
+      .then(r => r.json())
+      .then(data => {
+        if (data && !data.error) {
+          setValues(data[accountStatus.active] ?? {})
+          setTtTokens({
+            personal: data.personal?.tt_access_token ?? '',
+            business: data.business?.tt_access_token ?? '',
+          })
+        }
+      })
+  }, [accountStatus?.active])
 
   async function handleSave() {
     setSaving(true)
@@ -53,7 +79,7 @@ function SettingsContent() {
       const res = await fetch('/api/drive/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, slot: accountStatus?.active ?? 'personal' }),
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -63,6 +89,24 @@ function SettingsContent() {
       setError(String(e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleTtDisconnect(slot: AccountSlot) {
+    setDisconnecting(slot)
+    try {
+      const existing = await fetch(`/api/drive/credentials?slot=${slot}`).then(r => r.json())
+      const { tt_access_token: _, ...rest } = existing
+      await fetch('/api/drive/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...rest, slot }),
+      })
+      setTtTokens(prev => ({ ...prev, [slot]: '' }))
+    } catch {
+      // ignore
+    } finally {
+      setDisconnecting(null)
     }
   }
 
@@ -125,7 +169,7 @@ function SettingsContent() {
               })}
             </div>
             <p className="text-text-muted text-xs mt-3 italic">
-              All files (videos, analysis) are stored in the Personal account's Drive. Each slot has its own TikTok, Instagram, and YouTube credentials. Switch slots to manage each account's settings.
+              All files (videos, analysis) are stored in the Personal account's Drive. Each slot has its own TikTok, Instagram, and YouTube credentials.
             </p>
           </div>
 
@@ -144,22 +188,54 @@ function SettingsContent() {
                 TikTok connection failed: {ttError}
               </div>
             )}
-            <div className={`p-4 rounded-xl border transition-all ${values.tt_access_token ? 'border-green/40 bg-green/5' : 'border-border bg-surface2'}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${values.tt_access_token ? 'bg-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-border'}`} />
-                <span className="text-sm text-text">
-                  {values.tt_access_token ? 'Connected' : 'Not connected'}
-                </span>
-              </div>
-              <a
-                href={`/api/auth/tiktok/connect?slot=${accountStatus?.active ?? 'personal'}`}
-                className="block w-full text-center py-2 rounded-lg text-xs font-semibold transition-colors border border-border bg-bg hover:bg-surface2 text-text"
-              >
-                {values.tt_access_token ? 'Reconnect TikTok' : 'Connect TikTok'}
-              </a>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(['personal', 'business'] as AccountSlot[]).map(slot => {
+                const connected = !!ttTokens[slot]
+                const isActive = accountStatus?.active === slot
+                return (
+                  <div
+                    key={slot}
+                    className={`p-4 rounded-xl border transition-all ${
+                      connected ? 'border-green/40 bg-green/5' : isActive ? 'border-primary bg-primary/5' : 'border-border bg-surface2'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold tracking-wider uppercase text-text-muted capitalize">
+                        {slot}
+                      </span>
+                      {isActive && (
+                        <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-border'}`} />
+                      <span className="text-sm text-text">{connected ? 'Connected' : 'Not connected'}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <a
+                        href={`/api/auth/tiktok/connect?slot=${slot}`}
+                        className="flex-1 text-center py-2 rounded-lg text-xs font-semibold transition-colors border border-border bg-bg hover:bg-surface2 text-text"
+                      >
+                        {connected ? 'Reconnect' : 'Connect'}
+                      </a>
+                      {connected && (
+                        <button
+                          onClick={() => handleTtDisconnect(slot)}
+                          disabled={disconnecting === slot}
+                          className="px-3 py-2 rounded-lg text-xs font-semibold transition-colors border border-red/30 bg-red/5 hover:bg-red/10 text-red disabled:opacity-50"
+                        >
+                          {disconnecting === slot ? '...' : 'Disconnect'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <p className="text-text-muted text-xs mt-2 italic">
-              Connects the active account slot's TikTok. Switch slots before connecting to link a different TikTok account.
+            <p className="text-text-muted text-xs mt-3 italic">
+              Each slot connects its own TikTok account independently. Make sure you're logged into the right TikTok account before connecting.
             </p>
           </div>
 
