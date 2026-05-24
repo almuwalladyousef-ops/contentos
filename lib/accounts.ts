@@ -31,12 +31,16 @@ function decrypt(text: string): string {
   return decipher.update(Buffer.from(encHex, 'hex')).toString('utf8') + decipher.final('utf8')
 }
 
-const COOKIE_OPTS = {
+export const COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   maxAge: 60 * 60 * 24 * 365,
   path: '/',
+}
+
+export function encryptAccount(account: StoredAccount): string {
+  return encrypt(JSON.stringify(account))
 }
 
 export async function getAccountsStatus() {

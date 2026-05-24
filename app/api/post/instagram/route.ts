@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getActiveAccount } from '@/lib/accounts'
+import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
 import { getCredentials } from '@/lib/drive'
 
 export const maxDuration = 120
@@ -7,11 +7,11 @@ export const maxDuration = 120
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 export async function POST(req: NextRequest) {
-  const account = await getActiveAccount()
+  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const creds = await getCredentials(account.accessToken)
+    const creds = await getCredentials(account.accessToken, status.active)
     if (!creds?.ig_access_token || !creds?.ig_account_id) {
       return NextResponse.json({ error: 'Instagram credentials not set in Settings' }, { status: 400 })
     }

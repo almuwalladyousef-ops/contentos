@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount } from '@/lib/accounts'
+import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${base}/settings?tt_error=${error ?? 'no_code'}`)
   }
 
-  const account = await getPersonalAccount()
+  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) {
     return NextResponse.redirect(`${base}/settings?tt_error=no_account`)
   }
@@ -38,8 +38,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { rootId } = await ensureFolderStructure(account.accessToken)
-  const existing = await getCredentials(account.accessToken) ?? {}
-  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken })
+  const existing = await getCredentials(account.accessToken, status.active) ?? {}
+  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken }, status.active)
 
   return NextResponse.redirect(`${base}/settings?tt_connected=1`)
 }

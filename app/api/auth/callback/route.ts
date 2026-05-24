@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { saveAccount, switchAccount, AccountSlot } from '@/lib/accounts'
+import { AccountSlot, encryptAccount, COOKIE_OPTS } from '@/lib/accounts'
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code')
@@ -28,13 +28,15 @@ export async function GET(req: NextRequest) {
   })
   const user = await userRes.json()
 
-  await saveAccount(slot, {
+  const encrypted = encryptAccount({
     email: user.email,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600),
   })
-  await switchAccount(slot)
 
-  return NextResponse.redirect(new URL('/settings', req.url))
+  const response = NextResponse.redirect(new URL('/settings', req.url))
+  response.cookies.set(`cms_${slot}`, encrypted, COOKIE_OPTS)
+  response.cookies.set('cms_active', slot, COOKIE_OPTS)
+  return response
 }

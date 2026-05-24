@@ -125,7 +125,7 @@ function SettingsContent() {
               })}
             </div>
             <p className="text-text-muted text-xs mt-3 italic">
-              All Drive storage (videos, analysis, credentials) always uses the Personal account. The Business slot is only used for YouTube posting.
+              All files (videos, analysis) are stored in the Personal account's Drive. Each slot has its own TikTok, Instagram, and YouTube credentials. Switch slots to manage each account's settings.
             </p>
           </div>
 

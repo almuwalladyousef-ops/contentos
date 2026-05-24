@@ -148,10 +148,11 @@ export async function deleteFile(accessToken: string, fileId: string): Promise<v
   await drive.files.delete({ fileId })
 }
 
-export async function getCredentials(accessToken: string): Promise<Credentials | null> {
+export async function getCredentials(accessToken: string, slot = 'personal'): Promise<Credentials | null> {
   const drive = getDriveClient(accessToken)
+  const filename = `credentials-${slot}.json`
   const search = await drive.files.list({
-    q: `name='credentials.json' and trashed=false`,
+    q: `name='${filename}' and trashed=false`,
     fields: 'files(id)',
   })
   if (!search.data.files?.length) return null
@@ -160,6 +161,6 @@ export async function getCredentials(accessToken: string): Promise<Credentials |
   return JSON.parse(res.data as string) as Credentials
 }
 
-export async function saveCredentials(accessToken: string, rootFolderId: string, creds: Credentials): Promise<void> {
-  await writeJsonFile(accessToken, rootFolderId, 'credentials.json', creds)
+export async function saveCredentials(accessToken: string, rootFolderId: string, creds: Credentials, slot = 'personal'): Promise<void> {
+  await writeJsonFile(accessToken, rootFolderId, `credentials-${slot}.json`, creds)
 }
