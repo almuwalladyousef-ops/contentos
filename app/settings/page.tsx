@@ -32,6 +32,7 @@ function SettingsContent() {
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [ttTokens, setTtTokens] = useState<{ personal: string; business: string }>({ personal: '', business: '' })
+  const [ttNames, setTtNames] = useState<{ personal: string; business: string }>({ personal: '', business: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -52,6 +53,10 @@ function SettingsContent() {
             personal: data.personal?.tt_access_token ?? '',
             business: data.business?.tt_access_token ?? '',
           })
+          setTtNames({
+            personal: data.personal?.tt_display_name ?? '',
+            business: data.business?.tt_display_name ?? '',
+          })
         }
       })
   }, [])
@@ -66,6 +71,10 @@ function SettingsContent() {
           setTtTokens({
             personal: data.personal?.tt_access_token ?? '',
             business: data.business?.tt_access_token ?? '',
+          })
+          setTtNames({
+            personal: data.personal?.tt_display_name ?? '',
+            business: data.business?.tt_display_name ?? '',
           })
         }
       })
@@ -210,8 +219,10 @@ function SettingsContent() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-border'}`} />
-                      <span className="text-sm text-text">{connected ? 'Connected' : 'Not connected'}</span>
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-border'}`} />
+                      <span className="text-sm text-text truncate">
+                        {connected ? (ttNames[slot] || 'Connected') : 'Not connected'}
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <a

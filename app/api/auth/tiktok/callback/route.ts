@@ -38,9 +38,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${base}/settings?tt_error=${errMsg}`)
   }
 
+  let tt_display_name = ''
+  try {
+    const userRes = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=display_name', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const userData = await userRes.json()
+    tt_display_name = userData.data?.user?.display_name ?? ''
+  } catch { /* non-fatal */ }
+
   const { rootId } = await ensureFolderStructure(account.accessToken)
   const existing = await getCredentials(account.accessToken, slot) ?? {}
-  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken }, slot)
+  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken, tt_display_name }, slot)
 
   return NextResponse.redirect(`${base}/settings?tt_connected=1&slot=${slot}`)
 }
