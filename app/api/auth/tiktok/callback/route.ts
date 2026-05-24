@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
   const accessToken = tokenData.data?.access_token
 
   if (!accessToken) {
-    const code = tokenData.error?.code ?? 'unknown'
-    return NextResponse.redirect(`${base}/settings?tt_error=${code}`)
+    const errMsg = encodeURIComponent(JSON.stringify(tokenData))
+    return NextResponse.redirect(`${base}/settings?tt_error=${errMsg}`)
   }
 
   const { rootId } = await ensureFolderStructure(account.accessToken)
