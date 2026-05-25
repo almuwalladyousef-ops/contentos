@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!creds?.ig_access_token) return NextResponse.json({ error: 'Instagram not connected' }, { status: 400 })
 
   const { ig_access_token } = creds
-  const base = 'https://graph.facebook.com/v19.0'
+  const base = 'https://graph.facebook.com/v21.0'
 
   const [mediaRes, standardRes, reelsRes] = await Promise.all([
     fetch(`${base}/${mediaId}?fields=id,media_type,video_duration,timestamp&access_token=${ig_access_token}`),

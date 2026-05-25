@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   const { ig_access_token, ig_account_id } = creds
-  const base = 'https://graph.facebook.com/v19.0'
+  const base = 'https://graph.facebook.com/v21.0'
 
   try {
     const mediaRes = await fetch(
@@ -63,6 +63,8 @@ export async function GET() {
                   const val = m.values?.[0]?.value ?? m.value
                   if (val !== undefined) insightMetrics[m.name] = val
                 }
+              } else {
+                console.warn(`[IG insights] ${item.id}:`, d.error?.message, d.error?.code)
               }
             } catch { /* non-fatal */ }
           }
