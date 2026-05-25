@@ -59,6 +59,8 @@ export interface PlatformMetricsData {
   reach?: number
   avgWatchTimeMs?: number
   videoDurationSec?: number
+  retentionCurve?: number[]
+  avgRetentionPct?: number
 }
 
 export interface PlatformPost {

@@ -14,6 +14,7 @@ export function GET(req: NextRequest) {
       'https://www.googleapis.com/auth/drive.file',
       'https://www.googleapis.com/auth/youtube.upload',
       'https://www.googleapis.com/auth/youtube.force-ssl',
+      'https://www.googleapis.com/auth/yt-analytics.readonly',
     ].join(' '),
     access_type: 'offline',
     prompt: 'consent',

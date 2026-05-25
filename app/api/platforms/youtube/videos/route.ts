@@ -72,6 +72,7 @@ export async function GET() {
         views: parseInt(v.statistics.viewCount ?? '0'),
         likes: parseInt(v.statistics.likeCount ?? '0'),
         comments: parseInt(v.statistics.commentCount ?? '0'),
+        videoDurationSec: isoDurationToSeconds(v.contentDetails.duration),
       },
     }))
 

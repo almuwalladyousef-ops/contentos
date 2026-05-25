@@ -558,14 +558,25 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
   const riskColor = r.risk_level === 'high' ? 'var(--bad)' : r.risk_level === 'medium' ? 'var(--warn)' : 'var(--ok)'
   const score = riskScore(r.risk_level)
 
+  // YouTube Analytics: use real retention curve directly
+  const hasYTCurve = !!(metrics?.retentionCurve?.length)
+  // Instagram: compute exponential decay from avg watch time + duration
   const avgWatchSec = metrics?.avgWatchTimeMs ? metrics.avgWatchTimeMs / 1000 : null
   const durationSec = metrics?.videoDurationSec ?? null
-  const hasRealData = avgWatchSec !== null && durationSec !== null && durationSec > 0
-  const avgPct = hasRealData ? Math.min(100, Math.round((avgWatchSec! / durationSec!) * 100)) : null
+  const hasIGData = !hasYTCurve && avgWatchSec !== null && durationSec !== null && durationSec > 0
+  const hasRealData = hasYTCurve || hasIGData
 
-  const curve = hasRealData
-    ? buildRealRetentionCurve(avgWatchSec!, durationSec!)
-    : RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
+  const avgPct = hasYTCurve
+    ? (metrics?.avgRetentionPct ?? null)
+    : hasIGData ? Math.min(100, Math.round((avgWatchSec! / durationSec!) * 100)) : null
+
+  const curve = hasYTCurve
+    ? metrics!.retentionCurve!
+    : hasIGData
+      ? buildRealRetentionCurve(avgWatchSec!, durationSec!)
+      : RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
+
+  const dataSource = hasYTCurve ? 'YouTube Analytics' : hasIGData ? 'Instagram Insights' : null
 
   const fakeDrops = r.drop_off_points.slice(0, 3).map((text, i) => ({
     t: 0.2 + i * 0.28,
@@ -578,7 +589,7 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div className="micro" style={{ marginBottom: 4 }}>
-            retention curve · {hasRealData ? 'real Instagram data' : 'AI estimate'}
+            retention curve · {dataSource ? `real · ${dataSource}` : 'AI estimate'}
           </div>
           <h2 className="h2">Watch-through</h2>
         </div>
@@ -586,7 +597,7 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
           {hasRealData && avgPct !== null && (
             <span className="pill ok" style={{ gap: 6 }}>
               <span className="dot" style={{ background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)' }} />
-              avg {avgPct}% watched · {avgWatchSec!.toFixed(1)}s / {durationSec}s
+              avg {avgPct}%{hasIGData && avgWatchSec !== null && durationSec !== null ? ` · ${avgWatchSec.toFixed(1)}s / ${durationSec}s` : ' watched'}
             </span>
           )}
           <span className="pill" style={{
@@ -607,7 +618,8 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
         }}>
           <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
-            No watch-time data available — showing an AI estimate based on Gemini&apos;s {r.risk_level}-risk assessment. Real data requires avg watch time + duration from Instagram.
+            No watch-time data available — showing an AI estimate based on Gemini&apos;s {r.risk_level}-risk assessment.
+          {metrics?.platform === 'youtube' ? ' Reconnect your Google account in Settings to grant YouTube Analytics access.' : ' Real data requires avg watch time + duration from Instagram Insights.'}
           </span>
         </div>
       )}
@@ -907,12 +919,20 @@ export default function AnalysisPage() {
     try {
       let text = ''
       if (platform === 'youtube') {
-        setStatus('fetching YouTube captions...')
-        const tRes = await fetch(`/api/platforms/youtube/transcript?videoId=${selectedPost.id}`)
-        const tData = await tRes.json()
+        // Fetch captions + retention in parallel
+        setStatus('fetching YouTube captions & analytics...')
+        const [tRes, retRes] = await Promise.all([
+          fetch(`/api/platforms/youtube/transcript?videoId=${selectedPost.id}`),
+          fetch(`/api/platforms/youtube/retention?videoId=${selectedPost.id}`),
+        ])
+        const [tData, retData] = await Promise.all([tRes.json(), retRes.json()])
         if (tData.error) throw new Error(tData.error)
         text = tData.transcript
         setTranscript(text)
+        // Merge real retention curve into metrics (don't throw if analytics fails)
+        if (!retData.error && retData.curve) {
+          setMetrics(prev => prev ? { ...prev, retentionCurve: retData.curve, avgRetentionPct: retData.avgPct } : prev)
+        }
       } else {
         text = selectedPost.caption ?? ''
         if (!text) throw new Error('This post has no caption text to analyze.')
