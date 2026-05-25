@@ -54,19 +54,18 @@ export async function GET() {
           }
         } catch { /* non-fatal */ }
 
-        // Reels-only watch-time metrics — separate call so a failure doesn't kill standard metrics
-        if (item.media_type === 'REEL') {
-          try {
-            const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`)
-            const d = await r.json()
-            if (!d.error) {
-              for (const m of d.data ?? []) {
-                const val = m.values?.[0]?.value ?? m.value
-                if (val !== undefined) insightMetrics[m.name] = val
-              }
+        // Watch-time metrics — attempted for all video types since Instagram inconsistently
+        // returns media_type='VIDEO' for some Reels. Fails silently for true non-Reels.
+        try {
+          const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`)
+          const d = await r.json()
+          if (!d.error) {
+            for (const m of d.data ?? []) {
+              const val = m.values?.[0]?.value ?? m.value
+              if (val !== undefined) insightMetrics[m.name] = val
             }
-          } catch { /* non-fatal */ }
-        }
+          }
+        } catch { /* non-fatal */ }
 
         return {
           id: item.id,
