@@ -112,8 +112,10 @@ export default function PostPage() {
     // Step 1: Upload once to Vercel Blob
     let blobUrl: string
     try {
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase()
+      const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
       let lastPct = -1
-      const blob = await upload(file.name, file, {
+      const blob = await upload(safeName, file, {
         access: 'public',
         handleUploadUrl: '/api/blob/upload',
         onUploadProgress: ({ percentage }: { percentage: number }) => {
