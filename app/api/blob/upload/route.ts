@@ -11,7 +11,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         allowedContentTypes: ['video/mp4', 'video/quicktime', 'video/mov', 'video/avi', 'video/webm', 'video/x-m4v'],
         maximumSizeInBytes: 5 * 1024 * 1024 * 1024,
       }),
-      onUploadCompleted: async ({ blob }) => { console.log('blob upload completed', blob.url) },
+      onUploadCompleted: async () => {},
     })
     return NextResponse.json(jsonResponse)
   } catch (e) {

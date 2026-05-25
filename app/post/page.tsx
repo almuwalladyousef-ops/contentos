@@ -112,20 +112,23 @@ export default function PostPage() {
     // Step 1: Upload once to Vercel Blob
     let blobUrl: string
     try {
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/blob/upload',
-        onUploadProgress: (() => {
-          let lastPct = -1
-          return ({ percentage }: { percentage: number }) => {
+      let lastPct = -1
+      const blob = await Promise.race([
+        upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/blob/upload',
+          onUploadProgress: ({ percentage }: { percentage: number }) => {
             const pct = Math.round(percentage)
             if (pct >= lastPct + 5 || pct === 100) {
               lastPct = pct
               setAllStatus('uploading', `uploading ${pct}%...`)
             }
-          }
-        })(),
-      })
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Upload timed out — please try again')), 90_000)
+        ),
+      ])
       blobUrl = blob.url
       setAllStatus('uploading', 'sending to platforms...')
     } catch (e) {
