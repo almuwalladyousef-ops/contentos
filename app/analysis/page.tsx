@@ -618,8 +618,16 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
         }}>
           <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
-            No watch-time data available — showing an AI estimate based on Gemini&apos;s {r.risk_level}-risk assessment.
-          {metrics?.platform === 'youtube' ? ' Reconnect your Google account in Settings to grant YouTube Analytics access.' : ' Real data requires avg watch time + duration from Instagram Insights.'}
+            No watch-time data — showing AI estimate ({r.risk_level} risk).
+          {metrics?.platform === 'youtube'
+            ? ' Reconnect Google account in Settings to grant Analytics access.'
+            : (() => {
+                const missing = []
+                if (!metrics?.avgWatchTimeMs) missing.push('avg_watch_time')
+                if (!metrics?.videoDurationSec) missing.push('video_duration')
+                return ` Instagram didn't return: ${missing.join(', ') || 'unknown'}. Post may have too few views or not be a Reel.`
+              })()
+          }
           </span>
         </div>
       )}
