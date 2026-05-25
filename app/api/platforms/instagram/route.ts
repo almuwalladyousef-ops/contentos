@@ -2,6 +2,48 @@ import { NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
 import { getCredentials } from '@/lib/drive'
 
+const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
+
+type InsightMetricMap = Record<string, number>
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+async function fetchInsightMetric(mediaId: string, metric: string, token: string): Promise<InsightMetricMap> {
+  const url = new URL(`${GRAPH_BASE}/${mediaId}/insights`)
+  url.searchParams.set('metric', metric)
+  url.searchParams.set('period', 'lifetime')
+  url.searchParams.set('access_token', token)
+
+  const res = await fetch(url.toString())
+  const data = await res.json()
+  if (data.error) {
+    console.warn(`[IG insights] ${mediaId}/${metric}:`, data.error?.message, data.error?.code)
+    return {}
+  }
+
+  const metrics: InsightMetricMap = {}
+  for (const item of data.data ?? []) {
+    const value = toFiniteNumber(item.values?.[0]?.value ?? item.value)
+    if (value !== undefined) metrics[item.name ?? metric] = value
+  }
+  return metrics
+}
+
+async function fetchInsightMetrics(mediaId: string, metrics: string[], token: string): Promise<InsightMetricMap> {
+  const settled = await Promise.allSettled(metrics.map(metric => fetchInsightMetric(mediaId, metric, token)))
+  return settled.reduce<InsightMetricMap>((all, result) => {
+    if (result.status === 'fulfilled') Object.assign(all, result.value)
+    return all
+  }, {})
+}
+
 export async function GET() {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
@@ -12,11 +54,10 @@ export async function GET() {
   }
 
   const { ig_access_token, ig_account_id } = creds
-  const base = 'https://graph.facebook.com/v21.0'
 
   try {
     const mediaRes = await fetch(
-      `${base}/${ig_account_id}/media?fields=id,caption,media_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`
+      `${GRAPH_BASE}/${ig_account_id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`
     )
     const mediaData = await mediaRes.json()
 
@@ -25,7 +66,8 @@ export async function GET() {
     }
 
     const videoItems = (mediaData.data ?? []).filter(
-      (item: { media_type: string }) => item.media_type === 'VIDEO' || item.media_type === 'REEL'
+      (item: { media_type: string; media_product_type?: string }) =>
+        item.media_type === 'VIDEO' || item.media_type === 'REEL' || item.media_product_type === 'REELS'
     )
 
     const withInsights = await Promise.all(
@@ -33,6 +75,7 @@ export async function GET() {
         id: string
         caption?: string
         media_type: string
+        media_product_type?: string
         timestamp: string
         permalink?: string
         thumbnail_url?: string
@@ -41,43 +84,27 @@ export async function GET() {
         video_duration?: number
         duration?: number
       }) => {
-        const insightMetrics: Record<string, number> = {}
-
-        // Run four fetches in parallel.
-        // `plays` is intentionally separated from universal metrics — requesting it alongside
-        // reach/saved/shares causes the entire call to fail when Instagram classifies the post
-        // as VIDEO (not REEL), because `plays` is a Reel-only metric in v21.0.
-        const [standardRes, playsRes, watchRes, durationRes] = await Promise.allSettled([
-          fetch(`${base}/${item.id}/insights?metric=reach,saved,shares&period=lifetime&access_token=${ig_access_token}`),
-          fetch(`${base}/${item.id}/insights?metric=plays,video_views&period=lifetime&access_token=${ig_access_token}`),
-          fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`),
+        const [insightMetrics, durationRes] = await Promise.all([
+          fetchInsightMetrics(item.id, [
+            'reach',
+            'saved',
+            'shares',
+            'views',
+            'plays',
+            'video_views',
+            'ig_reels_avg_watch_time',
+            'ig_reels_video_view_total_time',
+          ], ig_access_token),
           (item.video_duration == null && item.duration == null)
-            ? fetch(`${base}/${item.id}?fields=video_duration,duration&access_token=${ig_access_token}`)
+            ? fetch(`${GRAPH_BASE}/${item.id}?fields=video_duration,duration&access_token=${ig_access_token}`)
             : Promise.resolve(null),
         ])
 
-        for (const settled of [standardRes, playsRes, watchRes]) {
-          if (settled.status === 'fulfilled') {
-            try {
-              const d = await settled.value.json()
-              if (!d.error) {
-                for (const m of d.data ?? []) {
-                  const val = m.values?.[0]?.value ?? m.value
-                  if (val !== undefined) insightMetrics[m.name] = val
-                }
-              } else {
-                console.warn(`[IG insights] ${item.id}:`, d.error?.message, d.error?.code)
-              }
-            } catch { /* non-fatal */ }
-          }
-        }
-
-        let videoDurationSec: number | undefined = item.video_duration ?? item.duration ?? undefined
-        if (videoDurationSec == null && durationRes.status === 'fulfilled' && durationRes.value) {
+        let videoDurationSec = toFiniteNumber(item.video_duration) ?? toFiniteNumber(item.duration)
+        if (videoDurationSec == null && durationRes) {
           try {
-            const d = await durationRes.value.json()
-            console.log(`[IG duration] ${item.id}:`, JSON.stringify(d))
-            videoDurationSec = d.video_duration ?? d.duration ?? undefined
+            const d = await durationRes.json()
+            videoDurationSec = toFiniteNumber(d.video_duration) ?? toFiniteNumber(d.duration)
           } catch { /* non-fatal */ }
         }
 
@@ -89,10 +116,11 @@ export async function GET() {
           thumbnail: item.thumbnail_url,
           metrics: {
             platform: 'instagram' as const,
-            mediaType: item.media_type,
-            plays: insightMetrics['plays']
+            mediaType: item.media_product_type ?? item.media_type,
+            plays: insightMetrics['views']
+              ?? insightMetrics['plays']
               ?? insightMetrics['video_views']
-              ?? (insightMetrics['ig_reels_video_view_total_time'] && insightMetrics['ig_reels_avg_watch_time']
+              ?? (insightMetrics['ig_reels_video_view_total_time'] !== undefined && insightMetrics['ig_reels_avg_watch_time']
                 ? Math.round(insightMetrics['ig_reels_video_view_total_time'] / insightMetrics['ig_reels_avg_watch_time'])
                 : undefined),
             reach: insightMetrics['reach'],

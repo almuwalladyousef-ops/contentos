@@ -60,6 +60,14 @@ function ratioOf(part: number, whole: number) {
   if (!whole) return '0.00'
   return ((part / whole) * 100).toFixed(2)
 }
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
 
 const RETENTION_CURVES: Record<string, number[]> = {
   high:   [100, 93, 81, 66, 57, 50, 43, 37, 32, 27, 23, 20, 17, 15, 13, 12, 11, 11, 10, 10],
@@ -171,9 +179,13 @@ function RetentionSparkline({ curve, drops, height = 160 }: {
   const padX = 12, padY = 14
   const innerW = Math.max(60, w - padX * 2)
   const innerH = height - padY * 2
+  const safeCurve = curve
+    .map(v => Math.max(0, Math.min(100, finiteNumber(v) ?? 0)))
+    .filter(v => Number.isFinite(v))
+  const drawableCurve = safeCurve.length >= 2 ? safeCurve : RETENTION_CURVES.medium
 
-  const pts = curve.map((val, i) => {
-    const x = padX + (i / (curve.length - 1)) * innerW
+  const pts = drawableCurve.map((val, i) => {
+    const x = padX + (i / (drawableCurve.length - 1)) * innerW
     const y = padY + innerH - (val / 100) * innerH
     return [x, y] as [number, number]
   })
@@ -209,7 +221,7 @@ function RetentionSparkline({ curve, drops, height = 160 }: {
           </>
         )}
         {drops.map((d, i) => {
-          const idx = Math.floor(d.t * (curve.length - 1))
+          const idx = Math.floor(d.t * (drawableCurve.length - 1))
           if (idx >= visibleCount) return null
           const [x, y] = pts[idx]
           const color = d.severity === 'high' ? 'var(--bad)' : 'var(--warn)'
@@ -561,8 +573,9 @@ function RetentionCard({ analysis, metrics, retentionError }: { analysis: VideoA
   // YouTube Analytics: use real retention curve directly
   const hasYTCurve = !!(metrics?.retentionCurve?.length)
   // Instagram: compute exponential decay from avg watch time + duration
-  const avgWatchSec = metrics?.avgWatchTimeMs ? metrics.avgWatchTimeMs / 1000 : null
-  const durationSec = metrics?.videoDurationSec ?? null
+  const avgWatchMs = finiteNumber(metrics?.avgWatchTimeMs)
+  const durationSec = finiteNumber(metrics?.videoDurationSec)
+  const avgWatchSec = avgWatchMs !== null ? avgWatchMs / 1000 : null
   const hasIGData = !hasYTCurve && avgWatchSec !== null && durationSec !== null && durationSec > 0
   const hasRealData = hasYTCurve || hasIGData
 
@@ -624,8 +637,8 @@ function RetentionCard({ analysis, metrics, retentionError }: { analysis: VideoA
             )}
             {!retentionError && metrics?.platform === 'instagram' && (() => {
               const missing = []
-              if (!metrics?.avgWatchTimeMs) missing.push('avg_watch_time')
-              if (!metrics?.videoDurationSec) missing.push('video_duration')
+              if (avgWatchMs === null) missing.push('avg_watch_time')
+              if (durationSec === null) missing.push('video_duration')
               return <div style={{ marginTop: 4 }}>Instagram didn&apos;t return: {missing.join(', ')}. This can happen if the post has too few views or if the token needs to be reconnected in Settings.</div>
             })()}
           </div>
