@@ -127,6 +127,7 @@ export default function PostPage() {
         })(),
       })
       blobUrl = blob.url
+      setAllStatus('uploading', 'sending to platforms...')
     } catch (e) {
       const msg = `Upload failed: ${String(e)}`
       setAllStatus('failed', msg)
