@@ -41,18 +41,32 @@ export async function GET() {
         video_duration?: number
       }) => {
         const insightMetrics: Record<string, number> = {}
+
+        // Standard metrics — always available
         try {
-          const insightsRes = await fetch(
-            `${base}/${item.id}/insights?metric=reach,plays,saved,shares,ig_reels_avg_watch_time&access_token=${ig_access_token}`
-          )
-          const insightsData = await insightsRes.json()
-          if (!insightsData.error) {
-            for (const m of insightsData.data ?? []) {
+          const r = await fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&access_token=${ig_access_token}`)
+          const d = await r.json()
+          if (!d.error) {
+            for (const m of d.data ?? []) {
               const val = m.values?.[0]?.value ?? m.value
               if (val !== undefined) insightMetrics[m.name] = val
             }
           }
         } catch { /* non-fatal */ }
+
+        // Reels-only watch-time metrics — separate call so a failure doesn't kill standard metrics
+        if (item.media_type === 'REEL') {
+          try {
+            const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&access_token=${ig_access_token}`)
+            const d = await r.json()
+            if (!d.error) {
+              for (const m of d.data ?? []) {
+                const val = m.values?.[0]?.value ?? m.value
+                if (val !== undefined) insightMetrics[m.name] = val
+              }
+            }
+          } catch { /* non-fatal */ }
+        }
 
         return {
           id: item.id,
@@ -66,7 +80,10 @@ export async function GET() {
             reach: insightMetrics['reach'],
             saves: insightMetrics['saved'],
             shares: insightMetrics['shares'],
-            avgWatchTimeMs: insightMetrics['ig_reels_avg_watch_time'],
+            avgWatchTimeMs: insightMetrics['ig_reels_avg_watch_time']
+              ?? (insightMetrics['ig_reels_video_view_total_time'] && insightMetrics['plays']
+                ? insightMetrics['ig_reels_video_view_total_time'] / insightMetrics['plays']
+                : undefined),
             likes: item.like_count,
             comments: item.comments_count,
             videoDurationSec: item.video_duration,
