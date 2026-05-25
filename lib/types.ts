@@ -41,6 +41,8 @@ export interface Credentials {
   ig_access_token?: string
   ig_account_id?: string
   tt_access_token?: string
+  tt_refresh_token?: string
+  tt_expires_at?: number
   tt_display_name?: string
   groq_api_key?: string
   gemini_api_key?: string

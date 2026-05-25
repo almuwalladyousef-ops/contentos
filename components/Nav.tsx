@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type AccountSlot = 'personal' | 'business'
@@ -20,7 +20,15 @@ const tabs = [
 
 export default function Nav() {
   const pathname = usePathname()
+  const router = useRouter()
   const [status, setStatus] = useState<AccountStatus | null>(null)
+
+  function navigate(href: string) {
+    if ((window as unknown as Record<string, unknown>).__uploadRunning) {
+      if (!confirm('Upload in progress. If you leave, the upload will be cancelled. Leave anyway?')) return
+    }
+    router.push(href)
+  }
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -51,9 +59,9 @@ export default function Nav() {
           {tabs.map(tab => {
             const isActive = pathname === tab.href
             return (
-              <Link
+              <button
                 key={tab.href}
-                href={tab.href}
+                onClick={() => navigate(tab.href)}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-in-out ${
                   isActive
                     ? 'bg-primary text-white shadow-md'
@@ -61,7 +69,7 @@ export default function Nav() {
                 }`}
               >
                 {tab.label}
-              </Link>
+              </button>
             )
           })}
         </div>

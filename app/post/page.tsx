@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
+import { upload } from '@vercel/blob/client'
 import StatusDot from '@/components/StatusDot'
 import { PostStatus } from '@/lib/types'
 
@@ -22,8 +23,6 @@ async function safeJson(res: Response) {
   try { return JSON.parse(text) } catch { return { error: text || `HTTP ${res.status}` } }
 }
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
 export default function PostPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -33,19 +32,35 @@ export default function PostPage() {
   const [statuses, setStatuses] = useState<Record<Platform, PlatStatus>>(initialStatus())
   const [running, setRunning] = useState(false)
 
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__uploadRunning = running
+    if (!running) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => { window.removeEventListener('beforeunload', handler) }
+  }, [running])
+
   function setStatus(platform: Platform, state: PostStatus, message = '') {
     setStatuses(s => ({ ...s, [platform]: { state, message } }))
   }
 
-  async function postYouTube(): Promise<string | null> {
-    if (!file) return null
-    setStatus('youtube', 'uploading', 'creating upload session...')
+  function setAllStatus(state: PostStatus, message = '') {
+    setStatuses({
+      youtube: { state, message },
+      instagram: { state, message },
+      tiktok: { state, message },
+    })
+  }
 
-    // Step 1: Server creates resumable upload session (needs OAuth token)
-    const initRes = await fetch('/api/post/youtube/init', {
+  async function postYouTube(blobUrl: string): Promise<string | null> {
+    if (!file) return null
+    setStatus('youtube', 'uploading', 'posting to YouTube...')
+
+    const res = await fetch('/api/post/youtube', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        blobUrl,
         title: file.name.replace(/\.[^.]+$/, ''),
         description: caption,
         privacy,
@@ -53,167 +68,87 @@ export default function PostPage() {
         type: file.type || 'video/mp4',
       }),
     })
-    const initData = await safeJson(initRes)
-    if (initData.error) { setStatus('youtube', 'failed', initData.error); return null }
-
-    // Step 2: Browser uploads directly to YouTube (bypasses Vercel size limit)
-    setStatus('youtube', 'uploading', 'uploading to YouTube...')
-    const uploadRes = await fetch(initData.sessionUri, {
-      method: 'PUT',
-      headers: {
-        'Content-Range': `bytes 0-${file.size - 1}/${file.size}`,
-        'Content-Type': file.type || 'video/mp4',
-      },
-      body: file,
-    })
-
-    if (!uploadRes.ok && uploadRes.status !== 200 && uploadRes.status !== 201) {
-      const err = await uploadRes.text()
-      setStatus('youtube', 'failed', `Upload failed: ${err}`)
-      return null
-    }
-
-    const data = await safeJson(uploadRes)
-    if (!data.id) { setStatus('youtube', 'failed', 'No video ID returned'); return null }
+    const data = await safeJson(res)
+    if (data.error) { setStatus('youtube', 'failed', data.error); return null }
     setStatus('youtube', 'success')
-    return `https://www.youtube.com/watch?v=${data.id}`
+    return data.videoUrl ?? null
   }
 
-  async function postInstagram(): Promise<string | null> {
+  async function postInstagram(blobUrl: string): Promise<string | null> {
     if (!file) return null
-    setStatus('instagram', 'uploading', 'creating upload session...')
-
-    // Step 1: Server creates Drive resumable upload session
-    const initRes = await fetch('/api/drive/upload-init', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ size: file.size, type: file.type || 'video/mp4' }),
-    })
-    const initData = await safeJson(initRes)
-    if (initData.error) { setStatus('instagram', 'failed', initData.error); return null }
-
-    // Step 2: Browser uploads directly to Drive (bypasses Vercel size limit)
-    setStatus('instagram', 'uploading', 'uploading to Drive...')
-    const uploadRes = await fetch(initData.uploadUri, {
-      method: 'PUT',
-      headers: {
-        'Content-Range': `bytes 0-${file.size - 1}/${file.size}`,
-        'Content-Type': file.type || 'video/mp4',
-        'Content-Length': String(file.size),
-      },
-      body: file,
-    })
-
-    if (!uploadRes.ok && uploadRes.status !== 200 && uploadRes.status !== 201) {
-      const err = await uploadRes.text()
-      setStatus('instagram', 'failed', `Drive upload failed: ${err}`)
-      return null
-    }
-
-    const driveData = await safeJson(uploadRes)
-    const fileId = driveData.id
-    if (!fileId) { setStatus('instagram', 'failed', 'No file ID from Drive'); return null }
-
-    // Step 3: Make Drive file public (server-side)
-    const pubRes = await fetch('/api/drive/make-public', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileId }),
-    })
-    const pubData = await safeJson(pubRes)
-    if (pubData.error) { setStatus('instagram', 'failed', pubData.error); return null }
-
-    // Step 4: Post to Instagram via server
     setStatus('instagram', 'uploading', 'posting to Instagram...')
-    const igRes = await fetch('/api/post/instagram', {
+
+    const res = await fetch('/api/post/instagram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl: pubData.publicUrl, caption }),
+      body: JSON.stringify({ videoUrl: blobUrl, caption }),
     })
-    const igData = await safeJson(igRes)
-
-    // Cleanup temp file regardless of outcome
-    fetch('/api/drive/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileId }),
-    }).catch(() => {})
-
-    if (igData.error) { setStatus('instagram', 'failed', igData.error); return null }
+    const data = await safeJson(res)
+    if (data.error) { setStatus('instagram', 'failed', data.error); return null }
     setStatus('instagram', 'success')
-    return igData.postUrl
+    return data.postUrl ?? null
   }
 
-  async function postTikTok(): Promise<string | null> {
+  async function postTikTok(blobUrl: string): Promise<string | null> {
     if (!file) return null
-    setStatus('tiktok', 'uploading', 'creating upload session...')
+    setStatus('tiktok', 'uploading', 'posting to TikTok...')
 
-    // Step 1: Server creates TikTok upload session (needs TikTok token)
-    const initRes = await fetch('/api/post/tiktok/init', {
+    const res = await fetch('/api/post/tiktok', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caption, privacy: ttPrivacy, size: file.size }),
+      body: JSON.stringify({ blobUrl, caption, privacy: ttPrivacy, size: file.size }),
     })
-    const initData = await safeJson(initRes)
-    if (initData.error) { setStatus('tiktok', 'failed', initData.error); return null }
-
-    // Step 2: Browser uploads directly to TikTok (bypasses Vercel size limit)
-    setStatus('tiktok', 'uploading', 'uploading to TikTok...')
-    const uploadRes = await fetch(initData.uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Range': `bytes 0-${file.size - 1}/${file.size}`,
-        'Content-Length': String(file.size),
-        'Content-Type': 'video/mp4',
-      },
-      body: file,
-    })
-
-    if (!uploadRes.ok) {
-      setStatus('tiktok', 'failed', `TikTok upload failed: ${uploadRes.status}`)
-      return null
-    }
-
-    // Step 3: Poll publish status via server (needs TikTok token)
-    setStatus('tiktok', 'uploading', 'processing...')
-    for (let i = 0; i < 30; i++) {
-      await sleep(5000)
-      const statusRes = await fetch('/api/post/tiktok/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publishId: initData.publishId }),
-      })
-      const statusData = await safeJson(statusRes)
-      if (statusData.status === 'PUBLISH_COMPLETE') {
-        setStatus('tiktok', 'success')
-        return null
-      }
-      if (statusData.status === 'FAILED') {
-        setStatus('tiktok', 'failed', `Publish failed: ${JSON.stringify(statusData.raw)}`)
-        return null
-      }
-    }
-
-    setStatus('tiktok', 'failed', 'Timed out waiting for TikTok to process')
+    const data = await safeJson(res)
+    if (data.error) { setStatus('tiktok', 'failed', data.error); return null }
+    setStatus('tiktok', 'success')
     return null
   }
 
   async function handlePostAll() {
     if (!file) return
     setRunning(true)
-    setStatuses({
-      youtube: { state: 'uploading', message: '' },
-      instagram: { state: 'uploading', message: '' },
-      tiktok: { state: 'uploading', message: '' },
-    })
+    setAllStatus('uploading', 'uploading...')
 
+    // Step 1: Upload once to Vercel Blob
+    let blobUrl: string
+    try {
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/blob/upload',
+        onUploadProgress: (() => {
+          let lastPct = -1
+          return ({ percentage }: { percentage: number }) => {
+            const pct = Math.round(percentage)
+            if (pct >= lastPct + 5 || pct === 100) {
+              lastPct = pct
+              setAllStatus('uploading', `uploading ${pct}%...`)
+            }
+          }
+        })(),
+      })
+      blobUrl = blob.url
+    } catch (e) {
+      const msg = `Upload failed: ${String(e)}`
+      setAllStatus('failed', msg)
+      setRunning(false)
+      return
+    }
+
+    // Step 2: Post to all platforms in parallel using the blob URL
     const [ytUrl, igUrl] = await Promise.all([
-      postYouTube().catch(e => { setStatus('youtube', 'failed', String(e)); return null }),
-      postInstagram().catch(e => { setStatus('instagram', 'failed', String(e)); return null }),
-      postTikTok().catch(e => { setStatus('tiktok', 'failed', String(e)); return null }),
+      postYouTube(blobUrl).catch(e => { setStatus('youtube', 'failed', String(e)); return null }),
+      postInstagram(blobUrl).catch(e => { setStatus('instagram', 'failed', String(e)); return null }),
+      postTikTok(blobUrl).catch(e => { setStatus('tiktok', 'failed', String(e)); return null }),
     ])
 
-    const platforms: ('youtube' | 'instagram' | 'tiktok')[] = []
+    // Step 3: Delete blob
+    fetch('/api/blob/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: blobUrl }),
+    }).catch(() => {})
+
+    const platforms: Platform[] = []
     if (ytUrl) platforms.push('youtube')
     if (igUrl) platforms.push('instagram')
 
@@ -245,7 +180,6 @@ export default function PostPage() {
         <div className="p-6 sm:p-8">
           <h1 className="text-2xl font-bold text-text mb-6">Create New Post</h1>
 
-          {/* File Upload Section */}
           <div className="mb-8">
             <div className="flex items-center gap-4">
               <input
@@ -267,7 +201,6 @@ export default function PostPage() {
             </div>
           </div>
 
-          {/* Caption Section */}
           <div className="mb-8">
             <label className="block text-text-muted text-xs font-semibold mb-2 tracking-wider uppercase">
               Caption
@@ -281,7 +214,6 @@ export default function PostPage() {
             />
           </div>
 
-          {/* Privacy Settings Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
             <div className="bg-bg/50 p-4 rounded-xl border border-border/50">
               <div className="text-text-muted text-xs font-semibold mb-3 tracking-wider uppercase">YouTube Privacy</div>
@@ -337,7 +269,6 @@ export default function PostPage() {
             </div>
           </div>
 
-          {/* Action Button */}
           <button
             onClick={handlePostAll}
             disabled={!file || running}
@@ -351,7 +282,6 @@ export default function PostPage() {
           </button>
         </div>
 
-        {/* Status Section */}
         <div className="bg-surface2 px-6 sm:px-8 py-5 border-t border-border">
           <div className="text-text-muted text-xs font-semibold mb-4 tracking-wider uppercase flex items-center justify-between">
             <span>Status</span>

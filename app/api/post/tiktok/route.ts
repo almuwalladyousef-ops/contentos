@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
+import { ensureFolderStructure, getTikTokToken } from '@/lib/drive'
 
 export const maxDuration = 300
 
@@ -11,40 +11,35 @@ export async function POST(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const creds = await getCredentials(account.accessToken, status.active)
-    if (!creds?.tt_access_token) {
+    const { rootId } = await ensureFolderStructure(account.accessToken)
+    const tt_access_token = await getTikTokToken(account.accessToken, rootId, status.active)
+    if (!tt_access_token) {
       return NextResponse.json({ error: 'TikTok access token not set in Settings' }, { status: 400 })
     }
 
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    const caption = (formData.get('caption') as string) || ''
-    const privacy = (formData.get('privacy') as string) || 'SELF_ONLY'
+    const { blobUrl, caption, privacy, size } = await req.json()
+    if (!blobUrl) return NextResponse.json({ error: 'No blob URL provided' }, { status: 400 })
 
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-
-    const { tt_access_token } = creds
     const headers = {
       Authorization: `Bearer ${tt_access_token}`,
       'Content-Type': 'application/json; charset=UTF-8',
     }
 
-    // Step 1: Init upload
     const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
       method: 'POST',
       headers,
       body: JSON.stringify({
         post_info: {
-          title: caption.slice(0, 150) || 'New video',
-          privacy_level: privacy,
+          title: (caption as string)?.slice(0, 150) || 'New video',
+          privacy_level: privacy || 'SELF_ONLY',
           disable_duet: false,
           disable_comment: false,
           disable_stitch: false,
         },
         source_info: {
           source: 'FILE_UPLOAD',
-          video_size: file.size,
-          chunk_size: file.size,
+          video_size: size,
+          chunk_size: size,
           total_chunk_count: 1,
         },
       }),
@@ -57,23 +52,26 @@ export async function POST(req: NextRequest) {
 
     const { upload_url, publish_id } = initData.data
 
-    // Step 2: Upload file
-    const buffer = await file.arrayBuffer()
+    const blobRes = await fetch(blobUrl)
+    if (!blobRes.ok || !blobRes.body) {
+      return NextResponse.json({ error: 'Failed to fetch from blob storage' }, { status: 500 })
+    }
+
     const uploadRes = await fetch(upload_url, {
       method: 'PUT',
       headers: {
-        'Content-Range': `bytes 0-${file.size - 1}/${file.size}`,
-        'Content-Length': String(file.size),
+        'Content-Range': `bytes 0-${size - 1}/${size}`,
+        'Content-Length': String(size),
         'Content-Type': 'video/mp4',
       },
-      body: buffer,
-    })
+      body: blobRes.body,
+      duplex: 'half',
+    } as RequestInit)
 
     if (!uploadRes.ok) {
       return NextResponse.json({ error: `TikTok upload failed: ${uploadRes.status}` }, { status: 500 })
     }
 
-    // Step 3: Poll for completion
     let attempts = 0
     while (attempts < 30) {
       await sleep(5000)
@@ -83,11 +81,11 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ publish_id }),
       })
       const statusData = await statusRes.json()
-      const status = statusData.data?.status
-      if (status === 'PUBLISH_COMPLETE') {
+      const pubStatus = statusData.data?.status
+      if (pubStatus === 'PUBLISH_COMPLETE') {
         return NextResponse.json({ publishId: publish_id })
       }
-      if (status === 'FAILED') {
+      if (pubStatus === 'FAILED') {
         return NextResponse.json({ error: `TikTok publish failed: ${JSON.stringify(statusData)}` }, { status: 500 })
       }
       attempts++

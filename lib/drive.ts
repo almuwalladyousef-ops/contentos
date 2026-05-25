@@ -143,6 +143,46 @@ export async function uploadTempVideo(accessToken: string, tempFolderId: string,
   return fileId
 }
 
+export async function getTikTokToken(googleAccessToken: string, rootId: string, slot: string): Promise<string | null> {
+  const creds = await getCredentials(googleAccessToken, slot)
+  if (!creds?.tt_access_token) return null
+
+  const expiresAt = creds.tt_expires_at ?? 0
+  const isExpired = Date.now() > expiresAt - 60_000 // refresh 1 min before expiry
+
+  if (!isExpired) return creds.tt_access_token
+  if (!creds.tt_refresh_token) return creds.tt_access_token // no refresh token, try anyway
+
+  try {
+    const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: process.env.TIKTOK_CLIENT_KEY!,
+        client_secret: process.env.TIKTOK_CLIENT_SECRET!,
+        grant_type: 'refresh_token',
+        refresh_token: creds.tt_refresh_token,
+      }),
+    })
+    const data = await res.json()
+    const newToken = data.access_token ?? data.data?.access_token
+    const newRefresh = data.refresh_token ?? data.data?.refresh_token
+    const expiresIn = data.expires_in ?? data.data?.expires_in ?? 86400
+
+    if (newToken) {
+      await saveCredentials(googleAccessToken, rootId, {
+        ...creds,
+        tt_access_token: newToken,
+        tt_refresh_token: newRefresh ?? creds.tt_refresh_token,
+        tt_expires_at: Date.now() + expiresIn * 1000,
+      }, slot)
+      return newToken
+    }
+  } catch { /* fall through */ }
+
+  return creds.tt_access_token // return old token if refresh fails
+}
+
 export async function deleteFile(accessToken: string, fileId: string): Promise<void> {
   const drive = getDriveClient(accessToken)
   await drive.files.delete({ fileId })

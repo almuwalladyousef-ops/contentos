@@ -8,15 +8,9 @@ export async function POST(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    const title = (formData.get('title') as string) || file.name.replace(/\.[^.]+$/, '')
-    const description = (formData.get('description') as string) || ''
-    const privacy = (formData.get('privacy') as string) || 'unlisted'
+    const { blobUrl, title, description, privacy, size, type } = await req.json()
+    if (!blobUrl) return NextResponse.json({ error: 'No blob URL provided' }, { status: 400 })
 
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-
-    // Step 1: Initiate resumable upload session
     const initRes = await fetch(
       'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
       {
@@ -24,12 +18,12 @@ export async function POST(req: NextRequest) {
         headers: {
           Authorization: `Bearer ${account.accessToken}`,
           'Content-Type': 'application/json',
-          'X-Upload-Content-Type': file.type || 'video/mp4',
-          'X-Upload-Content-Length': String(file.size),
+          'X-Upload-Content-Type': type || 'video/mp4',
+          'X-Upload-Content-Length': String(size),
         },
         body: JSON.stringify({
-          snippet: { title, description },
-          status: { privacyStatus: privacy },
+          snippet: { title: title || 'New video', description: description || '' },
+          status: { privacyStatus: privacy || 'unlisted' },
         }),
       }
     )
@@ -40,18 +34,22 @@ export async function POST(req: NextRequest) {
     }
 
     const sessionUri = initRes.headers.get('Location')
-    if (!sessionUri) return NextResponse.json({ error: 'No upload session URI returned' }, { status: 500 })
+    if (!sessionUri) return NextResponse.json({ error: 'No upload URI returned' }, { status: 500 })
 
-    // Step 2: Upload file to resumable session URI
-    const buffer = await file.arrayBuffer()
+    const blobRes = await fetch(blobUrl)
+    if (!blobRes.ok || !blobRes.body) {
+      return NextResponse.json({ error: 'Failed to fetch from blob storage' }, { status: 500 })
+    }
+
     const uploadRes = await fetch(sessionUri, {
       method: 'PUT',
       headers: {
-        'Content-Range': `bytes 0-${file.size - 1}/${file.size}`,
-        'Content-Type': file.type || 'video/mp4',
+        'Content-Range': `bytes 0-${size - 1}/${size}`,
+        'Content-Type': type || 'video/mp4',
       },
-      body: buffer,
-    })
+      body: blobRes.body,
+      duplex: 'half',
+    } as RequestInit)
 
     if (!uploadRes.ok && uploadRes.status !== 200 && uploadRes.status !== 201) {
       const err = await uploadRes.text()
@@ -59,10 +57,9 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await uploadRes.json()
-    const videoId = data.id
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+    if (!data.id) return NextResponse.json({ error: 'No video ID returned' }, { status: 500 })
 
-    return NextResponse.json({ videoId, videoUrl })
+    return NextResponse.json({ videoId: data.id, videoUrl: `https://www.youtube.com/watch?v=${data.id}` })
   } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

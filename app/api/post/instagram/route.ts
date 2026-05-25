@@ -7,11 +7,11 @@ export const maxDuration = 120
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 export async function POST(req: NextRequest) {
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
+  const [account, accountsStatus] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const creds = await getCredentials(account.accessToken, status.active)
+    const creds = await getCredentials(account.accessToken, accountsStatus.active)
     if (!creds?.ig_access_token || !creds?.ig_account_id) {
       return NextResponse.json({ error: 'Instagram credentials not set in Settings' }, { status: 400 })
     }

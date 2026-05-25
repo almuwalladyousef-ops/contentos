@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     response_type: 'code',
     redirect_uri: redirectUri,
     state: slot,
+    force_login: 'true',
   })
 
   return NextResponse.redirect(`https://www.tiktok.com/v2/auth/authorize/?${params}`)

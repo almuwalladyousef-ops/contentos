@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
 
   const tokenData = await tokenRes.json()
   const accessToken = tokenData.access_token ?? tokenData.data?.access_token
+  const refreshToken = tokenData.refresh_token ?? tokenData.data?.refresh_token
+  const expiresIn = tokenData.expires_in ?? tokenData.data?.expires_in ?? 86400
 
   if (!accessToken) {
     const errMsg = encodeURIComponent(JSON.stringify(tokenData))
@@ -49,7 +51,13 @@ export async function GET(req: NextRequest) {
 
   const { rootId } = await ensureFolderStructure(account.accessToken)
   const existing = await getCredentials(account.accessToken, slot) ?? {}
-  await saveCredentials(account.accessToken, rootId, { ...existing, tt_access_token: accessToken, tt_display_name }, slot)
+  await saveCredentials(account.accessToken, rootId, {
+    ...existing,
+    tt_access_token: accessToken,
+    tt_refresh_token: refreshToken ?? existing.tt_refresh_token,
+    tt_expires_at: Date.now() + expiresIn * 1000,
+    tt_display_name,
+  }, slot)
 
   return NextResponse.redirect(`${base}/settings?tt_connected=1&slot=${slot}`)
 }
