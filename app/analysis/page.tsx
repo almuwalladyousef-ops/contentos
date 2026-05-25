@@ -67,6 +67,27 @@ const RETENTION_CURVES: Record<string, number[]> = {
   low:    [100, 98, 95, 91, 86, 83, 80, 77, 75, 73, 71, 69, 67, 65, 64, 63, 62, 61, 60, 60],
 }
 
+// Build a real exponential-decay retention curve from avg watch time + duration.
+// Solves for λ in: avgWatch = (1 - e^(-λ·T)) / λ using bisection, then samples the curve.
+function buildRealRetentionCurve(avgWatchSec: number, durationSec: number, points = 20): number[] {
+  const W = Math.min(avgWatchSec, durationSec * 0.98) // cap at 98% in case of replays
+  const T = durationSec
+  if (W <= 0 || T <= 0) return RETENTION_CURVES.medium
+
+  let lo = 1e-4, hi = 30
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2
+    const est = (1 - Math.exp(-mid * T)) / mid
+    if (est > W) lo = mid; else hi = mid
+  }
+  const lambda = (lo + hi) / 2
+
+  return Array.from({ length: points }, (_, i) => {
+    const t = (i / (points - 1)) * T
+    return Math.round(100 * Math.exp(-lambda * t))
+  })
+}
+
 // ── Animated hook meter ───────────────────────────────────────────────────────
 function HookMeter({ score = 0, strength, size = 168 }: { score?: number; strength?: string; size?: number }) {
   const [v, setV] = useState(0)
@@ -532,11 +553,20 @@ function VerdictCard({ analysis }: { analysis: VideoAnalysis }) {
   )
 }
 
-function RetentionCard({ analysis }: { analysis: VideoAnalysis }) {
+function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics?: PlatformMetricsData | null }) {
   const r = analysis.retention_risk
   const riskColor = r.risk_level === 'high' ? 'var(--bad)' : r.risk_level === 'medium' ? 'var(--warn)' : 'var(--ok)'
   const score = riskScore(r.risk_level)
-  const curve = RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
+
+  const avgWatchSec = metrics?.avgWatchTimeMs ? metrics.avgWatchTimeMs / 1000 : null
+  const durationSec = metrics?.videoDurationSec ?? null
+  const hasRealData = avgWatchSec !== null && durationSec !== null && durationSec > 0
+  const avgPct = hasRealData ? Math.min(100, Math.round((avgWatchSec! / durationSec!) * 100)) : null
+
+  const curve = hasRealData
+    ? buildRealRetentionCurve(avgWatchSec!, durationSec!)
+    : RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
+
   const fakeDrops = r.drop_off_points.slice(0, 3).map((text, i) => ({
     t: 0.2 + i * 0.28,
     label: text,
@@ -547,28 +577,40 @@ function RetentionCard({ analysis }: { analysis: VideoAnalysis }) {
     <div className="card" style={{ padding: 'var(--pad)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div className="micro" style={{ marginBottom: 4 }}>retention curve · AI estimate</div>
-          <h2 className="h2">Watch-through estimate</h2>
+          <div className="micro" style={{ marginBottom: 4 }}>
+            retention curve · {hasRealData ? 'real Instagram data' : 'AI estimate'}
+          </div>
+          <h2 className="h2">Watch-through</h2>
         </div>
-        <span className="pill" style={{
-          background: `oklch(from ${riskColor} l c h / 0.12)`,
-          borderColor: `oklch(from ${riskColor} l c h / 0.4)`,
-          color: riskColor,
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {hasRealData && avgPct !== null && (
+            <span className="pill ok" style={{ gap: 6 }}>
+              <span className="dot" style={{ background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)' }} />
+              avg {avgPct}% watched · {avgWatchSec!.toFixed(1)}s / {durationSec}s
+            </span>
+          )}
+          <span className="pill" style={{
+            background: `oklch(from ${riskColor} l c h / 0.12)`,
+            borderColor: `oklch(from ${riskColor} l c h / 0.4)`,
+            color: riskColor,
+          }}>
+            <span className="dot" style={{ background: riskColor, boxShadow: `0 0 8px ${riskColor}` }} />
+            {r.risk_level} risk · {score}/100
+          </span>
+        </div>
+      </div>
+      {!hasRealData && (
+        <div style={{
+          marginBottom: 14, padding: '8px 12px', borderRadius: 8,
+          background: 'oklch(0.82 0.15 80 / 0.07)', border: '1px solid oklch(0.82 0.15 80 / 0.2)',
+          display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span className="dot" style={{ background: riskColor, boxShadow: `0 0 8px ${riskColor}` }} />
-          {r.risk_level} risk · {score}/100
-        </span>
-      </div>
-      <div style={{
-        marginBottom: 14, padding: '8px 12px', borderRadius: 8,
-        background: 'oklch(0.82 0.15 80 / 0.07)', border: '1px solid oklch(0.82 0.15 80 / 0.2)',
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
-          This is a <strong>modeled estimate</strong> based on Gemini&apos;s retention risk assessment — not real YouTube Analytics watch-time data. Shape reflects typical {r.risk_level}-risk content patterns.
-        </span>
-      </div>
+          <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
+            No watch-time data available — showing an AI estimate based on Gemini&apos;s {r.risk_level}-risk assessment. Real data requires avg watch time + duration from Instagram.
+          </span>
+        </div>
+      )}
       <RetentionSparkline curve={curve} drops={fakeDrops} height={200} />
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
         <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>0:00</span>
@@ -1088,7 +1130,7 @@ export default function AnalysisPage() {
             <FormatCard analysis={analysis} />
             <VerdictCard analysis={analysis} />
           </div>
-          <RetentionCard analysis={analysis} />
+          <RetentionCard analysis={analysis} metrics={metrics} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
             <ViralityCard factors={analysis.virality_factors} />
             <NarrativeCard structure={analysis.narrative_structure} />

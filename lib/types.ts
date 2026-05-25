@@ -58,6 +58,7 @@ export interface PlatformMetricsData {
   shares?: number
   reach?: number
   avgWatchTimeMs?: number
+  videoDurationSec?: number
 }
 
 export interface PlatformPost {

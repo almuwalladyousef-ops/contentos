@@ -16,7 +16,7 @@ export async function GET() {
 
   try {
     const mediaRes = await fetch(
-      `${base}/${ig_account_id}/media?fields=id,caption,media_type,timestamp,permalink,thumbnail_url,like_count,comments_count&limit=20&access_token=${ig_access_token}`
+      `${base}/${ig_account_id}/media?fields=id,caption,media_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration&limit=20&access_token=${ig_access_token}`
     )
     const mediaData = await mediaRes.json()
 
@@ -38,6 +38,7 @@ export async function GET() {
         thumbnail_url?: string
         like_count?: number
         comments_count?: number
+        video_duration?: number
       }) => {
         const insightMetrics: Record<string, number> = {}
         try {
@@ -68,6 +69,7 @@ export async function GET() {
             avgWatchTimeMs: insightMetrics['ig_reels_avg_watch_time'],
             likes: item.like_count,
             comments: item.comments_count,
+            videoDurationSec: item.video_duration,
           },
         }
       })
