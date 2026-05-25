@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!videoUrl) return NextResponse.json({ error: 'No video URL provided' }, { status: 400 })
 
     const { ig_access_token, ig_account_id } = creds
-    const base = `https://graph.facebook.com/v19.0`
+    const base = `https://graph.facebook.com/v21.0`
 
     // Step 1: Create media container
     const containerParams = new URLSearchParams({
@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     })
     const containerData = await containerRes.json()
     if (containerData.error) {
-      return NextResponse.json({ error: `Instagram container error: ${containerData.error.message}` }, { status: 400 })
+      const e = containerData.error
+      return NextResponse.json({ error: `Instagram container error: (#${e.code}/${e.error_subcode}) ${e.message} [type: ${e.type}]` }, { status: 400 })
     }
     const creationId = containerData.id
 
