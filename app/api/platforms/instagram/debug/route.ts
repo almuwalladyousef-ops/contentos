@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const base = 'https://graph.facebook.com/v21.0'
 
   const [mediaRes, standardRes, reelsRes] = await Promise.all([
-    fetch(`${base}/${mediaId}?fields=id,media_type,video_duration,timestamp&access_token=${ig_access_token}`),
+    fetch(`${base}/${mediaId}?fields=id,media_type,video_duration,duration,timestamp,media_product_type&access_token=${ig_access_token}`),
     fetch(`${base}/${mediaId}/insights?metric=reach,plays,saved,shares&period=lifetime&access_token=${ig_access_token}`),
     fetch(`${base}/${mediaId}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`),
   ])

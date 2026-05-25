@@ -16,7 +16,7 @@ export async function GET() {
 
   try {
     const mediaRes = await fetch(
-      `${base}/${ig_account_id}/media?fields=id,caption,media_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration&limit=20&access_token=${ig_access_token}`
+      `${base}/${ig_account_id}/media?fields=id,caption,media_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`
     )
     const mediaData = await mediaRes.json()
 
@@ -39,6 +39,7 @@ export async function GET() {
         like_count?: number
         comments_count?: number
         video_duration?: number
+        duration?: number
       }) => {
         const insightMetrics: Record<string, number> = {}
 
@@ -50,8 +51,8 @@ export async function GET() {
           fetch(`${base}/${item.id}/insights?metric=reach,saved,shares&period=lifetime&access_token=${ig_access_token}`),
           fetch(`${base}/${item.id}/insights?metric=plays,video_views&period=lifetime&access_token=${ig_access_token}`),
           fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`),
-          item.video_duration == null
-            ? fetch(`${base}/${item.id}?fields=video_duration&access_token=${ig_access_token}`)
+          (item.video_duration == null && item.duration == null)
+            ? fetch(`${base}/${item.id}?fields=video_duration,duration&access_token=${ig_access_token}`)
             : Promise.resolve(null),
         ])
 
@@ -71,11 +72,12 @@ export async function GET() {
           }
         }
 
-        let videoDurationSec = item.video_duration ?? undefined
+        let videoDurationSec: number | undefined = item.video_duration ?? item.duration ?? undefined
         if (videoDurationSec == null && durationRes.status === 'fulfilled' && durationRes.value) {
           try {
             const d = await durationRes.value.json()
-            if (d.video_duration) videoDurationSec = d.video_duration
+            console.log(`[IG duration] ${item.id}:`, JSON.stringify(d))
+            videoDurationSec = d.video_duration ?? d.duration ?? undefined
           } catch { /* non-fatal */ }
         }
 
