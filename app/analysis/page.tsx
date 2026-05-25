@@ -553,7 +553,7 @@ function VerdictCard({ analysis }: { analysis: VideoAnalysis }) {
   )
 }
 
-function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics?: PlatformMetricsData | null }) {
+function RetentionCard({ analysis, metrics, retentionError }: { analysis: VideoAnalysis; metrics?: PlatformMetricsData | null; retentionError?: string }) {
   const r = analysis.retention_risk
   const riskColor = r.risk_level === 'high' ? 'var(--bad)' : r.risk_level === 'medium' ? 'var(--warn)' : 'var(--ok)'
   const score = riskScore(r.risk_level)
@@ -614,21 +614,21 @@ function RetentionCard({ analysis, metrics }: { analysis: VideoAnalysis; metrics
         <div style={{
           marginBottom: 14, padding: '8px 12px', borderRadius: 8,
           background: 'oklch(0.82 0.15 80 / 0.07)', border: '1px solid oklch(0.82 0.15 80 / 0.2)',
-          display: 'flex', alignItems: 'center', gap: 8,
+          display: 'flex', alignItems: 'flex-start', gap: 8,
         }}>
-          <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
-            No watch-time data — showing AI estimate ({r.risk_level} risk).
-          {metrics?.platform === 'youtube'
-            ? ' Reconnect Google account in Settings to grant Analytics access.'
-            : (() => {
-                const missing = []
-                if (!metrics?.avgWatchTimeMs) missing.push('avg_watch_time')
-                if (!metrics?.videoDurationSec) missing.push('video_duration')
-                return ` Instagram didn't return: ${missing.join(', ') || 'unknown'}. Post may have too few views or not be a Reel.`
-              })()
-          }
-          </span>
+          <span style={{ fontSize: 13, color: 'var(--accent)', flexShrink: 0, marginTop: 1 }}>⚠</span>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6 }}>
+            <div>Showing AI estimate ({r.risk_level} risk) — no real watch-time data.</div>
+            {retentionError && (
+              <div style={{ marginTop: 4, color: 'var(--bad)' }}>API error: {retentionError}</div>
+            )}
+            {!retentionError && metrics?.platform === 'instagram' && (() => {
+              const missing = []
+              if (!metrics?.avgWatchTimeMs) missing.push('avg_watch_time')
+              if (!metrics?.videoDurationSec) missing.push('video_duration')
+              return <div style={{ marginTop: 4 }}>Instagram didn&apos;t return: {missing.join(', ') || 'unknown field'}. Post may have too few views or not be a Reel.</div>
+            })()}
+          </div>
         </div>
       )}
       <RetentionSparkline curve={curve} drops={fakeDrops} height={200} />
@@ -857,6 +857,7 @@ export default function AnalysisPage() {
   const [running, setRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState('')
+  const [retentionError, setRetentionError] = useState('')
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -923,7 +924,7 @@ export default function AnalysisPage() {
 
   async function handlePlatformRun() {
     if (!selectedPost) return
-    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(selectedPost.metrics); setSaved(false)
+    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(selectedPost.metrics); setSaved(false); setRetentionError('')
     try {
       let text = ''
       if (platform === 'youtube') {
@@ -940,6 +941,8 @@ export default function AnalysisPage() {
         // Merge real retention curve into metrics (don't throw if analytics fails)
         if (!retData.error && retData.curve) {
           setMetrics(prev => prev ? { ...prev, retentionCurve: retData.curve, avgRetentionPct: retData.avgPct } : prev)
+        } else if (retData.error) {
+          setRetentionError(retData.error)
         }
       } else {
         text = selectedPost.caption ?? ''
@@ -1158,7 +1161,7 @@ export default function AnalysisPage() {
             <FormatCard analysis={analysis} />
             <VerdictCard analysis={analysis} />
           </div>
-          <RetentionCard analysis={analysis} metrics={metrics} />
+          <RetentionCard analysis={analysis} metrics={metrics} retentionError={retentionError} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
             <ViralityCard factors={analysis.virality_factors} />
             <NarrativeCard structure={analysis.narrative_structure} />
