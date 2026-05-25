@@ -1,13 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import AnalysisResult from '@/components/AnalysisResult'
-import PlatformMetrics from '@/components/PlatformMetrics'
-import { IconUpload } from '@/components/Icons'
+import { useRef, useState, useEffect } from 'react'
+import {
+  IconUpload, IconLink, IconSparkles, IconClock, IconClipboard,
+  IconArrowUp, IconExternal, IconEye, IconCheck, IconBolt, IconFilm,
+  PlatformIcon,
+} from '@/components/Icons'
 import { VideoAnalysis, PlatformPost, PlatformMetricsData } from '@/lib/types'
 
 // ── WAV encoder ───────────────────────────────────────────────────────────────
-
 function encodeWAV(audioBuffer: AudioBuffer): Blob {
   const numChannels = 1
   const sampleRate = audioBuffer.sampleRate
@@ -39,66 +40,737 @@ function encodeWAV(audioBuffer: AudioBuffer): Blob {
   return new Blob([buffer], { type: 'audio/wav' })
 }
 
-// ── Post card ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function hookScore(strength: string) {
+  if (strength === 'strong') return 82
+  if (strength === 'medium') return 58
+  return 32
+}
+function riskScore(level: string) {
+  if (level === 'low') return 80
+  if (level === 'medium') return 57
+  return 33
+}
+function formatCount(n: number) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + 'K'
+  return n.toLocaleString()
+}
+function ratioOf(part: number, whole: number) {
+  if (!whole) return '0.00'
+  return ((part / whole) * 100).toFixed(2)
+}
 
-function PostCard({
-  post, platform, selected, onClick,
-}: {
+const RETENTION_CURVES: Record<string, number[]> = {
+  high:   [100, 93, 81, 66, 57, 50, 43, 37, 32, 27, 23, 20, 17, 15, 13, 12, 11, 11, 10, 10],
+  medium: [100, 96, 89, 81, 73, 67, 62, 57, 53, 50, 47, 45, 42, 40, 38, 37, 36, 35, 35, 34],
+  low:    [100, 98, 95, 91, 86, 83, 80, 77, 75, 73, 71, 69, 67, 65, 64, 63, 62, 61, 60, 60],
+}
+
+// ── Animated hook meter ───────────────────────────────────────────────────────
+function HookMeter({ score = 0, strength, size = 168 }: { score?: number; strength?: string; size?: number }) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    const start = performance.now()
+    const dur = 1000
+    let raf: number
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / dur)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setV(score * eased)
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [score])
+
+  const color = score >= 75 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--bad)'
+  const stroke = 10
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const offset = c - (v / 100) * c
+
+  return (
+    <div style={{ display: 'grid', placeItems: 'center', position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--surface-3)" strokeWidth={stroke} fill="none" />
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          stroke={color} strokeWidth={stroke} fill="none"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          style={{ transition: 'stroke 240ms ease', filter: `drop-shadow(0 0 12px ${color})` }}
+        />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+        <div>
+          <div className="mono" style={{ fontSize: size > 100 ? 44 : 22, color: 'var(--text)', fontWeight: 500, lineHeight: 1 }}>
+            {Math.round(v)}
+          </div>
+          <div className="micro" style={{ marginTop: 4 }}>{strength || 'score'}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Retention sparkline ───────────────────────────────────────────────────────
+function RetentionSparkline({ curve, drops, height = 160 }: {
+  curve: number[]
+  drops: Array<{ t: number; label: string; severity: string }>
+  height?: number
+}) {
+  const [w, setW] = useState(640)
+  const ref = useRef<HTMLDivElement>(null)
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    if (!ref.current) return
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) setW(Math.floor(e.contentRect.width))
+    })
+    ro.observe(ref.current)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const start = performance.now()
+    const dur = 1200
+    let raf: number
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / dur)
+      setProgress(1 - Math.pow(1 - p, 3))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const padX = 12, padY = 14
+  const innerW = Math.max(60, w - padX * 2)
+  const innerH = height - padY * 2
+
+  const pts = curve.map((val, i) => {
+    const x = padX + (i / (curve.length - 1)) * innerW
+    const y = padY + innerH - (val / 100) * innerH
+    return [x, y] as [number, number]
+  })
+
+  const visibleCount = Math.max(2, Math.floor(pts.length * progress))
+  const visible = pts.slice(0, visibleCount)
+  const path = visible.length ? 'M ' + visible.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L ') : ''
+  const area = visible.length ? path + ` L ${visible[visible.length - 1][0].toFixed(1)} ${padY + innerH} L ${visible[0][0].toFixed(1)} ${padY + innerH} Z` : ''
+  const grids = [0, 25, 50, 75, 100]
+
+  return (
+    <div ref={ref} style={{ width: '100%', position: 'relative' }}>
+      <svg width={w} height={height} style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="retFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {grids.map(g => {
+          const y = padY + innerH - (g / 100) * innerH
+          return (
+            <g key={g}>
+              <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="var(--hairline)" strokeDasharray="2 4" />
+              <text x={w - padX + 4} y={y + 4} fontSize="9" fill="var(--text-mute)" fontFamily="var(--font-mono)">{g}</text>
+            </g>
+          )
+        })}
+        {visible.length > 0 && (
+          <>
+            <path d={area} fill="url(#retFill)" />
+            <path d={path} stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        )}
+        {drops.map((d, i) => {
+          const idx = Math.floor(d.t * (curve.length - 1))
+          if (idx >= visibleCount) return null
+          const [x, y] = pts[idx]
+          const color = d.severity === 'high' ? 'var(--bad)' : 'var(--warn)'
+          return (
+            <g key={i}>
+              <line x1={x} y1={padY} x2={x} y2={padY + innerH} stroke={color} strokeOpacity="0.25" strokeDasharray="2 3" />
+              <circle cx={x} cy={y} r="5" fill="var(--bg)" stroke={color} strokeWidth="2" />
+              <circle cx={x} cy={y} r="2" fill={color} />
+            </g>
+          )
+        })}
+        <line x1={padX} y1={padY + innerH} x2={w - padX} y2={padY + innerH} stroke="var(--border)" />
+      </svg>
+    </div>
+  )
+}
+
+// ── Weight bar ────────────────────────────────────────────────────────────────
+function WeightBar({ weight }: { weight: number }) {
+  return (
+    <div style={{ position: 'relative', height: 4, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        width: `${Math.round(weight * 100)}%`,
+        background: 'var(--accent)', borderRadius: 999,
+        transition: 'width 600ms cubic-bezier(0.2,0.7,0.2,1)',
+        boxShadow: '0 0 8px var(--accent)',
+      }} />
+    </div>
+  )
+}
+
+// ── Score badge ───────────────────────────────────────────────────────────────
+function ScoreBadge({ score, size = 'sm' }: { score: number; size?: 'sm' | 'lg' }) {
+  const color = score >= 75 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--bad)'
+  const dim = score >= 75 ? 'oklch(0.78 0.16 155 / 0.12)' : score >= 50 ? 'oklch(0.82 0.15 80 / 0.12)' : 'oklch(0.70 0.19 25 / 0.12)'
+  const big = size === 'lg'
+  return (
+    <div className="mono" style={{
+      display: 'inline-flex', alignItems: 'baseline', gap: 3,
+      padding: big ? '6px 12px' : '3px 8px',
+      borderRadius: 6, background: dim, color,
+      fontSize: big ? 16 : 12, fontWeight: 600,
+      border: `1px solid ${color}`,
+      letterSpacing: '0.02em',
+    }}>
+      {score}<span style={{ fontSize: big ? 10 : 9, opacity: 0.6 }}>/100</span>
+    </div>
+  )
+}
+
+// ── Stat mini ─────────────────────────────────────────────────────────────────
+function Stat({ icon, dot, value, label }: { icon?: React.ReactNode; dot?: boolean; value: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-2)' }}>
+      {icon}
+      {dot && <span style={{ width: 3, height: 3, borderRadius: 999, background: 'var(--text-mute)' }} />}
+      <span className="mono" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{value}</span>
+      <span style={{ color: 'var(--text-mute)' }}>{label}</span>
+    </span>
+  )
+}
+
+// ── Segmented tabs ────────────────────────────────────────────────────────────
+function SegTabs({ value, onChange, options }: {
+  value: string
+  onChange: (v: string) => void
+  options: { v: string; label: string; icon?: React.ReactNode }[]
+}) {
+  return (
+    <div style={{
+      display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10,
+      background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+    }}>
+      {options.map(opt => {
+        const active = value === opt.v
+        return (
+          <button
+            key={opt.v}
+            onClick={() => onChange(opt.v)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '7px 14px', borderRadius: 7,
+              fontSize: 12.5, fontWeight: 500,
+              background: active ? 'var(--surface)' : 'transparent',
+              color: active ? 'var(--text)' : 'var(--text-dim)',
+              boxShadow: active ? '0 1px 0 oklch(1 0 0 / 0.04) inset, 0 4px 12px oklch(0 0 0 / 0.25)' : 'none',
+              border: active ? '1px solid var(--hairline)' : '1px solid transparent',
+              transition: 'all 120ms ease',
+            }}
+          >
+            {opt.icon} {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Post card ─────────────────────────────────────────────────────────────────
+function PostCard({ post, platform, selected, onClick }: {
   post: PlatformPost
   platform: 'instagram' | 'youtube'
   selected: boolean
   onClick: () => void
 }) {
-  const label = platform === 'youtube' ? post.title : post.caption
-  const snippet = label ? (label.length > 80 ? label.slice(0, 80) + '…' : label) : 'No caption'
-  const date = new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const plays = platform === 'youtube' ? post.metrics.views : post.metrics.plays
-  const likes = post.metrics.likes
+  const caption = platform === 'youtube' ? post.title : post.caption
+  const date = new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const plays = platform === 'youtube' ? (post.metrics.views ?? 0) : (post.metrics.plays ?? 0)
+  const likes = post.metrics.likes ?? 0
+  const comments = post.metrics.comments ?? 0
+  const hue = post.id.charCodeAt(0) * 5 % 360
 
   return (
     <button
       onClick={onClick}
       style={{
+        display: 'flex', gap: 14, alignItems: 'center', padding: 12,
+        borderRadius: 12,
+        background: selected ? 'var(--accent-dim)' : 'var(--bg-2)',
+        border: `1px solid ${selected ? 'var(--accent)' : 'var(--hairline)'}`,
+        textAlign: 'left', transition: 'all 140ms ease', cursor: 'pointer',
+        outline: selected ? '2px solid var(--accent-glow)' : 'none', outlineOffset: -1,
         width: '100%',
-        textAlign: 'left',
-        display: 'flex',
-        gap: 12,
-        padding: 12,
-        borderRadius: 10,
-        border: selected ? '1px solid var(--accent)' : '1px solid var(--border)',
-        background: selected ? 'oklch(0.80 0.16 80 / 0.08)' : 'var(--surface-2)',
-        transition: 'all 120ms ease',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => {
-        if (!selected) (e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.80 0.16 80 / 0.5)'
-      }}
-      onMouseLeave={e => {
-        if (!selected) (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'
       }}
     >
-      {post.thumbnail ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={post.thumbnail} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, flexShrink: 0, background: 'var(--border)' }} />
-      ) : (
-        <div style={{ width: 60, height: 60, borderRadius: 8, flexShrink: 0, background: 'var(--border)', display: 'grid', placeItems: 'center', color: 'var(--text-mute)', fontSize: 11, fontWeight: 600 }}>
-          {platform === 'youtube' ? 'YT' : 'IG'}
+      <div style={{
+        width: 64, height: 64, borderRadius: 8, flexShrink: 0,
+        background: post.thumbnail
+          ? undefined
+          : `linear-gradient(135deg, oklch(0.45 0.14 ${hue}), oklch(0.30 0.10 ${hue + 30}))`,
+        position: 'relative', overflow: 'hidden', border: '1px solid var(--hairline)',
+      }}>
+        {post.thumbnail
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={post.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(115deg, transparent 0 8px, oklch(1 0 0 / 0.04) 8px 9px)' }} />
+        }
+        <div style={{ position: 'absolute', top: 4, left: 5, color: 'oklch(1 0 0 / 0.9)' }}>
+          <PlatformIcon platform={platform} size={13} />
         </div>
-      )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4, margin: '0 0 6px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{snippet}</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, color: 'var(--text-mute)' }}>
-          <span>{date}</span>
-          {plays !== undefined && <span>{plays.toLocaleString()} {platform === 'youtube' ? 'views' : 'plays'}</span>}
-          {likes !== undefined && <span>{likes.toLocaleString()} likes</span>}
+        <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.4, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+          {caption || 'No caption'}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>{date}</span>
+          <Stat icon={<IconEye size={11} />} value={formatCount(plays)} label={platform === 'youtube' ? 'views' : 'plays'} />
+          <Stat dot value={formatCount(likes)} label="likes" />
+          <Stat dot value={formatCount(comments)} label="comments" />
+        </div>
+      </div>
+      <div style={{
+        width: 22, height: 22, borderRadius: 999,
+        background: selected ? 'var(--accent)' : 'var(--bg)',
+        border: `1px solid ${selected ? 'transparent' : 'var(--hairline)'}`,
+        display: 'grid', placeItems: 'center',
+        color: selected ? 'oklch(0.18 0.013 255)' : 'var(--text-mute)',
+        flexShrink: 0, transition: 'all 140ms ease',
+      }}>
+        {selected ? <IconCheck size={12} stroke={2.5} /> : null}
       </div>
     </button>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Source summary ────────────────────────────────────────────────────────────
+function SourceSummary({ post, platform, stage }: {
+  post: PlatformPost
+  platform: string
+  stage: string
+}) {
+  const date = new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const hue = post.id.charCodeAt(0) * 5 % 360
+  const riskColor = stage === 'done' ? 'var(--ok)' : stage === 'idle' ? 'var(--text-mute)' : 'var(--accent)'
+  return (
+    <div className="card" style={{ padding: 'var(--pad-sm)', display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+        background: `linear-gradient(135deg, oklch(0.45 0.14 ${hue}), oklch(0.30 0.10 ${hue + 30}))`,
+        border: '1px solid var(--hairline)',
+        display: 'grid', placeItems: 'center', color: 'oklch(1 0 0 / 0.92)',
+      }}>
+        <PlatformIcon platform={platform} size={18} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text)', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {(platform === 'youtube' ? post.title : post.caption) || 'No caption'}
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
+          {platform === 'youtube' ? 'YouTube' : 'Instagram'} · {date} · id <span style={{ color: 'var(--text-2)' }}>{post.id.slice(0, 16)}</span>
+        </div>
+      </div>
+      <span className="pill" style={{
+        background: stage === 'done' ? 'oklch(0.78 0.16 155 / 0.12)' : 'var(--surface-2)',
+        borderColor: stage === 'done' ? 'oklch(0.78 0.16 155 / 0.4)' : 'var(--hairline)',
+        color: stage === 'done' ? 'var(--ok)' : 'var(--text-2)',
+      }}>
+        <span className="dot" style={{
+          background: riskColor,
+          boxShadow: stage === 'done' ? '0 0 8px var(--ok)' : stage !== 'idle' ? '0 0 8px var(--accent-glow)' : 'none',
+        }} />
+        {stage === 'done' ? 'analysis ready' : stage === 'fetching' ? 'fetching captions' : stage === 'analyzing' ? 'running gemini' : 'live source'}
+      </span>
+      {post.permalink && (
+        <a className="btn ghost tiny" href={post.permalink} target="_blank" rel="noopener noreferrer">
+          <IconExternal size={11} /> Open post
+        </a>
+      )}
+    </div>
+  )
+}
 
+// ── Platform metrics card ─────────────────────────────────────────────────────
+function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsData; platform: string }) {
+  const isYT = platform === 'youtube'
+  const plays = isYT ? (metrics.views ?? 0) : (metrics.plays ?? 0)
+  const likes = metrics.likes ?? 0
+  const comments = metrics.comments ?? 0
+  const shares = metrics.shares ?? 0
+  const saves = metrics.saves ?? 0
+  const erTotal = likes + comments + shares + saves
+  const engagementRate = plays ? (erTotal / plays) * 100 : 0
+
+  const tiles = [
+    { k: isYT ? 'views' : 'plays', v: formatCount(plays), sub: 'lifetime' },
+    { k: 'likes', v: formatCount(likes), sub: ratioOf(likes, plays) + '%' },
+    { k: 'comments', v: formatCount(comments), sub: ratioOf(comments, plays) + '%' },
+    { k: 'shares', v: formatCount(shares), sub: ratioOf(shares, plays) + '%' },
+    ...(saves ? [{ k: 'saves', v: formatCount(saves), sub: ratioOf(saves, plays) + '%' }] : []),
+    { k: 'engagement', v: engagementRate.toFixed(2) + '%', sub: 'ER total' },
+  ]
+
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 4 }}>
+            live · pulled from {isYT ? 'YouTube Data API v3' : 'Instagram Graph API'}
+          </div>
+          <h2 className="h2">Platform metrics</h2>
+        </div>
+        <span className="pill ok"><span className="dot" /> synced just now</span>
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`,
+        gap: 10,
+      }}>
+        {tiles.map(t => (
+          <div key={t.k} style={{
+            padding: 14, background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+            borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0,
+          }}>
+            <div className="micro" style={{ marginBottom: 0 }}>{t.k}</div>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+              {t.v}
+            </div>
+            <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>{t.sub}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Analysis cards ────────────────────────────────────────────────────────────
+function HookCard({ hook }: { hook: VideoAnalysis['hook'] }) {
+  const score = hookScore(hook.strength)
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div className="micro" style={{ marginBottom: 16 }}>The Hook</div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <HookMeter score={score} strength={hook.strength.toUpperCase()} size={140} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div className="micro" style={{ marginBottom: 4 }}>category</div>
+            <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text)' }}>{hook.category}</div>
+          </div>
+          <div>
+            <div className="micro" style={{ marginBottom: 4 }}>template</div>
+            <div className="mono" style={{
+              fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, fontStyle: 'italic',
+              padding: '8px 10px', borderLeft: '2px solid var(--accent)',
+              background: 'var(--bg-2)', borderRadius: '0 6px 6px 0',
+            }}>
+              &ldquo;{hook.template}&rdquo;
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+        <div className="micro" style={{ marginBottom: 6 }}>Assessment</div>
+        <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{hook.assessment}</div>
+      </div>
+    </div>
+  )
+}
+
+function FormatCard({ analysis }: { analysis: VideoAnalysis }) {
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div className="micro" style={{ marginBottom: 16 }}>Format</div>
+      <div style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.35, marginBottom: 14, color: 'var(--text)' }}>
+        {analysis.format}
+      </div>
+      <div className="micro" style={{ marginBottom: 8 }}>Main topic</div>
+      <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>{analysis.main_topic}</div>
+      <div className="micro" style={{ marginBottom: 8 }}>Subtopics</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {analysis.subtopics.map((s, i) => (
+          <span key={i} className="mono" style={{
+            fontSize: 10.5, padding: '3px 8px', borderRadius: 5,
+            background: 'var(--bg-2)', border: '1px solid var(--hairline)', color: 'var(--text-2)',
+          }}>{s}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VerdictCard({ analysis }: { analysis: VideoAnalysis }) {
+  const score = hookScore(analysis.hook.strength)
+  return (
+    <div className="card" style={{ padding: 'var(--pad)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'radial-gradient(400px 200px at 100% 0%, var(--accent-dim), transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{ position: 'relative' }}>
+        <div className="micro" style={{ marginBottom: 16 }}>Verdict</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+          <ScoreBadge score={score} size="lg" />
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>top 25% in niche</div>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{analysis.overall_assessment}</div>
+      </div>
+    </div>
+  )
+}
+
+function RetentionCard({ analysis }: { analysis: VideoAnalysis }) {
+  const r = analysis.retention_risk
+  const riskColor = r.risk_level === 'high' ? 'var(--bad)' : r.risk_level === 'medium' ? 'var(--warn)' : 'var(--ok)'
+  const score = riskScore(r.risk_level)
+  const curve = RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
+  const fakeDrops = r.drop_off_points.slice(0, 3).map((text, i) => ({
+    t: 0.2 + i * 0.28,
+    label: text,
+    severity: i === 0 ? 'high' : 'medium',
+  }))
+
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 4 }}>retention curve · modeled</div>
+          <h2 className="h2">Watch-through estimate</h2>
+        </div>
+        <span className="pill" style={{
+          background: `oklch(from ${riskColor} l c h / 0.12)`,
+          borderColor: `oklch(from ${riskColor} l c h / 0.4)`,
+          color: riskColor,
+        }}>
+          <span className="dot" style={{ background: riskColor, boxShadow: `0 0 8px ${riskColor}` }} />
+          {r.risk_level} risk · {score}/100
+        </span>
+      </div>
+      <RetentionSparkline curve={curve} drops={fakeDrops} height={200} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>0:00</span>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>end</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--hairline)' }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 10 }}>Drop-off moments</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {r.drop_off_points.map((text, i) => {
+              const color = i === 0 ? 'var(--bad)' : 'var(--warn)'
+              return (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  padding: '8px 10px', borderRadius: 8,
+                  background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 999, background: color, boxShadow: `0 0 6px ${color}`, marginTop: 6, flexShrink: 0 }} />
+                  <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{text}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div>
+          <div className="micro" style={{ marginBottom: 10 }}>Why this curve</div>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.65 }}>{r.reasoning}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ViralityCard({ factors }: { analysis?: VideoAnalysis; factors: string[] }) {
+  const weights = [0.85, 0.72, 0.61, 0.52, 0.44, 0.38]
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 4 }}>What&apos;s driving shares</div>
+          <h2 className="h2">Virality factors</h2>
+        </div>
+        <IconBolt size={20} style={{ color: 'var(--accent)' }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {factors.map((text, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, flex: 1 }}>{text}</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)', flexShrink: 0 }}>
+                {Math.round((weights[i] ?? 0.3) * 100)}
+              </span>
+            </div>
+            <WeightBar weight={weights[i] ?? 0.3} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function NarrativeCard({ structure }: { structure: VideoAnalysis['narrative_structure'] }) {
+  const steps = [
+    { k: 'Opening', t: '0:00 – intro', text: structure.opening },
+    { k: 'Middle', t: 'body', text: structure.middle },
+    { k: 'Closing', t: 'outro', text: structure.closing },
+  ]
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div className="micro" style={{ marginBottom: 6 }}>Story arc</div>
+      <h2 className="h2" style={{ marginBottom: 16 }}>Narrative structure</h2>
+      <div style={{ position: 'relative' }}>
+        <div style={{ position: 'absolute', left: 7, top: 8, bottom: 8, width: 1, background: 'var(--hairline)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display: 'flex', gap: 14 }}>
+              <div style={{
+                width: 15, height: 15, borderRadius: 999, marginTop: 2,
+                background: 'var(--surface)', border: '2px solid var(--accent)',
+                position: 'relative', zIndex: 1, flexShrink: 0,
+                boxShadow: '0 0 8px var(--accent-glow)',
+              }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{s.k}</span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>{s.t}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>{s.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+        <div className="micro" style={{ marginBottom: 6 }}>Pacing</div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>{structure.pacing}</div>
+      </div>
+    </div>
+  )
+}
+
+function ImprovementsCard({ items }: { items: string[] }) {
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 4 }}>If you only do these</div>
+          <h2 className="h2">Suggested improvements</h2>
+        </div>
+        <span className="pill accent"><span className="dot" /> {items.length} actions</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {items.map((s, i) => (
+          <div key={i} style={{
+            display: 'flex', gap: 12, padding: 14, borderRadius: 10,
+            background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{
+              width: 24, height: 24, flexShrink: 0, borderRadius: 7,
+              background: 'var(--accent-dim)', color: 'var(--accent-2)',
+              display: 'grid', placeItems: 'center',
+              fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 11,
+              border: '1px solid oklch(0.72 0.16 255 / 0.3)',
+            }}>{String(i + 1).padStart(2, '0')}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.55 }}>{s}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TranscriptCard({ transcript, platform }: { transcript: string; platform: string }) {
+  const [open, setOpen] = useState(true)
+  const isYT = platform === 'youtube'
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+      >
+        <div>
+          <div className="micro" style={{ marginBottom: 4, textAlign: 'left' }}>
+            source · {isYT ? 'YouTube caption track' : 'Instagram caption text'}
+          </div>
+          <div className="h2" style={{ textAlign: 'left' }}>{isYT ? 'Transcript' : 'Caption'}</div>
+        </div>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{open ? 'hide' : 'show'} ↓</span>
+      </button>
+      {open && (
+        <div className="mono" style={{
+          marginTop: 14, padding: 14, borderRadius: 10,
+          background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+          fontSize: 12.5, lineHeight: 1.7, color: 'var(--text-2)', whiteSpace: 'pre-wrap',
+        }}>
+          {transcript}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Upload pane ───────────────────────────────────────────────────────────────
+function UploadPane({ file, fileRef, onBrowse, onRun, running, stage, isLarge }: {
+  file: File | null
+  fileRef: React.RefObject<HTMLInputElement | null>
+  onBrowse: () => void
+  onRun: () => void
+  running: boolean
+  stage: string
+  isLarge: boolean
+}) {
+  return (
+    <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div
+        onClick={onBrowse}
+        style={{
+          padding: 28, borderRadius: 12, border: '1.5px dashed var(--hairline)',
+          background: 'var(--bg-2)', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 10, cursor: 'pointer',
+        }}
+      >
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', color: 'var(--text-mute)' }}>
+          <IconUpload size={20} />
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-2)' }}>
+          {file ? file.name : 'Drop a video or audio file'}
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
+          {file
+            ? `${(file.size / 1024 / 1024).toFixed(1)} MB${isLarge ? ' · large file — audio extracted' : ''}`
+            : 'Up to 500 MB · mp4 · mov · wav'
+          }
+        </div>
+        {!file && <button className="btn" onClick={e => { e.stopPropagation(); onBrowse() }}><IconUpload size={13} /> Browse video</button>}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button className="btn primary" disabled={!file || running} onClick={onRun} style={{ height: 40, padding: '0 18px' }}>
+          {running ? (
+            <>{stage === 'fetching' ? 'Transcribing…' : 'Analyzing…'}</>
+          ) : (
+            <><IconSparkles size={14} /> Analyze</>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 type Mode = 'upload' | 'platform'
 type Platform = 'instagram' | 'youtube'
 
@@ -122,6 +794,7 @@ export default function AnalysisPage() {
   const [metrics, setMetrics] = useState<PlatformMetricsData | null>(null)
 
   const isLarge = file ? file.size > 25 * 1024 * 1024 : false
+  const stage = analysis ? 'done' : running ? (status.includes('fetch') || status.includes('Transcrib') ? 'fetching' : 'analyzing') : 'idle'
 
   async function fetchPosts(p: Platform) {
     setLoadingPosts(true)
@@ -141,17 +814,10 @@ export default function AnalysisPage() {
 
   async function handleUploadRun() {
     if (!file) return
-    setRunning(true)
-    setError('')
-    setTranscript('')
-    setAnalysis(null)
-    setMetrics(null)
-    setSaved(false)
-
+    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(null); setSaved(false)
     try {
       setStatus('extracting audio...')
       let audioFile: File | Blob = file
-
       if (file.size > 25 * 1024 * 1024) {
         const arrayBuf = await file.arrayBuffer()
         const audioCtx = new AudioContext({ sampleRate: 16000 })
@@ -160,7 +826,6 @@ export default function AnalysisPage() {
         const wavBlob = encodeWAV(audioBuffer)
         audioFile = new File([wavBlob], file.name.replace(/\.[^.]+$/, '.wav'), { type: 'audio/wav' })
       }
-
       setStatus('transcribing with Groq Whisper...')
       const fd = new FormData()
       fd.append('file', audioFile, (audioFile as File).name ?? 'audio.wav')
@@ -168,20 +833,14 @@ export default function AnalysisPage() {
       const tData = await tRes.json()
       if (tData.error) throw new Error(tData.error)
       setTranscript(tData.transcript)
-
       setStatus('analyzing with Gemini...')
-      const aRes = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: tData.transcript }),
-      })
+      const aRes = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript: tData.transcript }) })
       const aData = await aRes.json()
       if (aData.error) throw new Error(aData.error)
       setAnalysis(aData.analysis)
       setStatus('')
     } catch (e: unknown) {
-      setError(String(e))
-      setStatus('')
+      setError(String(e)); setStatus('')
     } finally {
       setRunning(false)
     }
@@ -189,16 +848,9 @@ export default function AnalysisPage() {
 
   async function handlePlatformRun() {
     if (!selectedPost) return
-    setRunning(true)
-    setError('')
-    setTranscript('')
-    setAnalysis(null)
-    setMetrics(selectedPost.metrics)
-    setSaved(false)
-
+    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(selectedPost.metrics); setSaved(false)
     try {
       let text = ''
-
       if (platform === 'youtube') {
         setStatus('fetching YouTube captions...')
         const tRes = await fetch(`/api/platforms/youtube/transcript?videoId=${selectedPost.id}`)
@@ -211,20 +863,14 @@ export default function AnalysisPage() {
         if (!text) throw new Error('This post has no caption text to analyze.')
         setTranscript(text)
       }
-
       setStatus('analyzing with Gemini...')
-      const aRes = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: text }),
-      })
+      const aRes = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript: text }) })
       const aData = await aRes.json()
       if (aData.error) throw new Error(aData.error)
       setAnalysis(aData.analysis)
       setStatus('')
     } catch (e: unknown) {
-      setError(String(e))
-      setStatus('')
+      setError(String(e)); setStatus('')
     } finally {
       setRunning(false)
     }
@@ -238,269 +884,216 @@ export default function AnalysisPage() {
         ? (file?.name.replace(/\.[^.]+$/, '') ?? 'video')
         : (selectedPost?.title ?? selectedPost?.caption?.slice(0, 40) ?? 'video')
       const timestamp = new Date().toISOString().slice(0, 10)
-
-      await fetch('/api/drive/save-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, analysis, name, timestamp }),
-      })
-
-      await fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'add',
-          entry: {
-            id: crypto.randomUUID(),
-            date: new Date().toISOString(),
-            video_name: name,
-            platforms: selectedPost ? [platform] : [],
-            caption: selectedPost?.caption ?? '',
-          },
-        }),
-      })
+      await fetch('/api/drive/save-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript, analysis, name, timestamp }) })
+      await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', entry: { id: crypto.randomUUID(), date: new Date().toISOString(), video_name: name, platforms: selectedPost ? [platform] : [], caption: selectedPost?.caption ?? '' } }) })
       setSaved(true)
     } catch (e: unknown) {
       setError(String(e))
     }
   }
 
-  const canRun = mode === 'upload' ? !!file && !running : !!selectedPost && !running
+  const ANALYSIS_PLATFORMS = [
+    { id: 'instagram' as Platform, name: 'Instagram', sub: 'caption-based' },
+    { id: 'youtube' as Platform, name: 'YouTube', sub: 'caption track' },
+  ]
 
   return (
-    <div style={{ maxWidth: 720, width: '100%', margin: '0 auto' }}>
+    <div className="anim-up" style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="h1">Analysis</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>Transcribe and analyze video content with AI</p>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div className="micro" style={{ marginBottom: 4 }}>v2 analyzer</div>
+          <h1 className="h1">Analyze video content</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="pill"><span className="dot" style={{ background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)' }} /> 2 accounts connected</span>
+          {analysis && (
+            <button className="btn ghost" onClick={() => {
+              const text = JSON.stringify(analysis, null, 2)
+              navigator.clipboard?.writeText(text)
+            }}>
+              <IconClipboard size={14} /> Copy report
+            </button>
+          )}
+          {analysis && <button className="btn" onClick={handleSave}><IconArrowUp size={14} /> {saved ? '✓ Saved' : 'Save to Drive'}</button>}
+        </div>
       </div>
 
-      <div className="card" style={{ padding: 24, marginBottom: 16 }}>
-        {/* Mode tabs */}
-        <div style={{
-          display: 'flex',
-          padding: 3,
-          background: 'var(--surface)',
-          border: '1px solid var(--hairline)',
-          borderRadius: 10,
-          marginBottom: 20,
-          width: 'fit-content',
-        }}>
-          {(['platform', 'upload'] as Mode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m)
-                setAnalysis(null)
-                setTranscript('')
-                setError('')
-                setMetrics(null)
-                setSaved(false)
-                if (m === 'platform') {
-                  setSelectedPost(null)
-                  setPosts([])
-                  setPostsError('')
-                  fetchPosts(platform)
-                }
-              }}
-              style={{
-                padding: '6px 16px',
-                borderRadius: 7,
-                fontSize: 12.5,
-                fontWeight: 600,
-                color: mode === m ? 'var(--text)' : 'var(--text-mute)',
-                background: mode === m ? 'var(--surface-3)' : 'transparent',
-                transition: 'all 120ms ease',
-                letterSpacing: '0.01em',
-              }}
-            >
-              {m === 'platform' ? 'From Platform' : 'Upload File'}
-            </button>
-          ))}
-        </div>
+      {/* Picker card */}
+      <div className="card" style={{ padding: 'var(--pad)' }}>
+        <SegTabs
+          value={mode}
+          onChange={v => {
+            setMode(v as Mode)
+            setAnalysis(null)
+            setTranscript('')
+            setError('')
+            setMetrics(null)
+            setSaved(false)
+            if (v === 'platform') { setSelectedPost(null); setPosts([]); setPostsError(''); fetchPosts(platform) }
+          }}
+          options={[
+            { v: 'platform', label: 'From platform', icon: <IconLink size={13} /> },
+            { v: 'upload', label: 'Upload file', icon: <IconUpload size={13} /> },
+          ]}
+        />
 
-        {/* Platform mode */}
-        {mode === 'platform' && (
-          <div style={{ marginBottom: 20 }}>
-            {/* Platform selector */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              {(['instagram', 'youtube'] as Platform[]).map(p => (
-                <button
-                  key={p}
-                  onClick={() => {
-                    setPlatform(p)
-                    setSelectedPost(null)
-                    setPosts([])
-                    setPostsError('')
-                    setAnalysis(null)
-                    setTranscript('')
-                    setMetrics(null)
-                    setError('')
-                    fetchPosts(p)
-                  }}
-                  style={{
-                    padding: '5px 14px',
-                    borderRadius: 7,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    border: platform === p ? '1px solid var(--accent)' : '1px solid var(--border)',
-                    color: platform === p ? 'var(--accent)' : 'var(--text-dim)',
-                    background: platform === p ? 'oklch(0.80 0.16 80 / 0.1)' : 'transparent',
-                    transition: 'all 120ms ease',
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {p === 'instagram' ? 'Instagram' : 'YouTube'}
-                </button>
-              ))}
+        {mode === 'platform' ? (
+          <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Platform sub-tabs */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {ANALYSIS_PLATFORMS.map(p => {
+                const active = platform === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setPlatform(p.id)
+                      setSelectedPost(null)
+                      setPosts([])
+                      setPostsError('')
+                      setAnalysis(null)
+                      setTranscript('')
+                      setMetrics(null)
+                      setError('')
+                      fetchPosts(p.id)
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10,
+                      border: `1px solid ${active ? 'var(--accent)' : 'var(--hairline)'}`,
+                      background: active ? 'var(--accent-dim)' : 'var(--bg-2)',
+                      color: active ? 'var(--text)' : 'var(--text-2)',
+                      transition: 'all 120ms ease',
+                    }}
+                  >
+                    <PlatformIcon platform={p.id} size={14} />
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
+                    <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>· {p.sub}</span>
+                  </button>
+                )
+              })}
+              <div style={{ flex: 1 }} />
+              <button className="btn ghost tiny" onClick={() => fetchPosts(platform)}><IconClock size={11} /> Refresh</button>
             </div>
 
             {/* Post list */}
             {loadingPosts ? (
               <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 13, color: 'var(--text-mute)' }}>Loading posts…</div>
             ) : postsError ? (
-              <div style={{
-                background: 'oklch(0.70 0.19 25 / 0.1)',
-                border: '1px solid oklch(0.70 0.19 25 / 0.3)',
-                color: 'var(--bad)',
-                padding: '10px 14px',
-                borderRadius: 8,
-                fontSize: 13,
-              }}>
+              <div style={{ background: 'oklch(0.70 0.19 25 / 0.1)', border: '1px solid oklch(0.70 0.19 25 / 0.3)', color: 'var(--bad)', padding: '10px 14px', borderRadius: 8, fontSize: 13 }}>
                 {postsError}
               </div>
             ) : posts.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 13, color: 'var(--text-mute)' }}>No recent posts found.</div>
             ) : (
-              <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, paddingRight: 4 }}>
-                {posts.map(post => (
+              <div className="scroll" style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 4, margin: -4 }}>
+                {posts.map(p => (
                   <PostCard
-                    key={post.id}
-                    post={post}
+                    key={p.id}
+                    post={p}
                     platform={platform}
-                    selected={selectedPost?.id === post.id}
-                    onClick={() => {
-                      setSelectedPost(post)
-                      setAnalysis(null)
-                      setTranscript('')
-                      setMetrics(null)
-                      setError('')
-                      setSaved(false)
-                    }}
+                    selected={p.id === selectedPost?.id}
+                    onClick={() => { setSelectedPost(p); setAnalysis(null); setTranscript(''); setMetrics(null); setError(''); setSaved(false) }}
                   />
                 ))}
               </div>
             )}
 
-            {!postsError && (
-              <p style={{ fontSize: 11.5, color: 'var(--text-mute)', marginTop: 8 }}>
+            {/* Footer */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 8, borderTop: '1px solid var(--hairline)' }}>
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
                 {platform === 'instagram'
-                  ? 'Analysis uses the post caption. Metrics pulled live from Instagram.'
-                  : "Analysis uses YouTube's built-in captions. Reconnect Google account in Settings if captions fail."}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Upload mode */}
-        {mode === 'upload' && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="video/*,audio/*"
-                style={{ display: 'none' }}
-                onChange={e => {
-                  setFile(e.target.files?.[0] ?? null)
-                  setTranscript('')
-                  setAnalysis(null)
-                  setError('')
-                }}
-              />
-              <button className="btn" onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <IconUpload size={14} />
-                Browse file
+                  ? 'Caption text + post metrics pulled live from Instagram Graph API.'
+                  : 'Caption track + analytics pulled live from YouTube Data API v3.'}
+              </div>
+              <button
+                className="btn primary"
+                onClick={handlePlatformRun}
+                disabled={!selectedPost || running}
+                style={{ height: 40, padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                {running ? (
+                  <>
+                    <span style={{ width: 12, height: 12, borderRadius: 999, border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 700ms linear infinite', display: 'inline-block' }} />
+                    {stage === 'fetching' ? 'Fetching captions…' : 'Analyzing…'}
+                  </>
+                ) : (
+                  <><IconSparkles size={14} /> Analyze</>
+                )}
               </button>
-              <span style={{ fontSize: 13, color: file ? 'var(--text)' : 'var(--text-mute)', fontStyle: file ? 'normal' : 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {file ? file.name : 'No file selected'}
-              </span>
-              {isLarge && (
-                <span style={{
-                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em',
-                  padding: '3px 8px', borderRadius: 6,
-                  background: 'oklch(0.82 0.15 80 / 0.12)',
-                  border: '1px solid oklch(0.82 0.15 80 / 0.25)',
-                  color: 'var(--warn)',
-                  whiteSpace: 'nowrap',
-                }}>
-                  Large — audio only
-                </span>
-              )}
             </div>
           </div>
+        ) : (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="video/*,audio/*"
+              style={{ display: 'none' }}
+              onChange={e => { setFile(e.target.files?.[0] ?? null); setTranscript(''); setAnalysis(null); setError('') }}
+            />
+            <UploadPane
+              file={file}
+              fileRef={fileRef}
+              onBrowse={() => fileRef.current?.click()}
+              onRun={handleUploadRun}
+              running={running}
+              stage={stage}
+              isLarge={isLarge}
+            />
+          </>
         )}
-
-        {/* Run button */}
-        <button
-          onClick={mode === 'upload' ? handleUploadRun : handlePlatformRun}
-          disabled={!canRun}
-          className="btn primary"
-          style={{ width: '100%', height: 42, fontSize: 13 }}
-        >
-          {running ? (status || 'Working…') : 'Analyze →'}
-        </button>
       </div>
 
       {/* Error */}
       {error && (
-        <div style={{
-          background: 'oklch(0.70 0.19 25 / 0.1)',
-          border: '1px solid oklch(0.70 0.19 25 / 0.3)',
-          color: 'var(--bad)',
-          padding: '12px 16px',
-          borderRadius: 10,
-          fontSize: 13,
-          marginBottom: 16,
-        }}>
+        <div style={{ background: 'oklch(0.70 0.19 25 / 0.1)', border: '1px solid oklch(0.70 0.19 25 / 0.3)', color: 'var(--bad)', padding: '12px 16px', borderRadius: 10, fontSize: 13 }}>
           {error}
         </div>
       )}
 
-      {/* Transcript */}
-      {transcript && (
-        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-          <div className="micro" style={{ marginBottom: 10 }}>
-            {mode === 'platform' && platform === 'instagram' ? 'Caption' : 'Transcript'}
-          </div>
-          <textarea
-            readOnly
-            value={transcript}
-            rows={6}
-            className="textarea"
-            style={{ resize: 'vertical', background: 'var(--surface)', cursor: 'default' }}
-          />
-        </div>
+      {/* Source summary */}
+      {selectedPost && mode === 'platform' && (
+        <SourceSummary post={selectedPost} platform={platform} stage={stage} />
       )}
 
-      {/* Results */}
-      {(metrics || analysis) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {metrics && <PlatformMetrics metrics={metrics} />}
-          {analysis && <AnalysisResult analysis={analysis} />}
-          {analysis && (
-            <button
-              onClick={handleSave}
-              className="btn"
-              style={saved ? {
-                background: 'oklch(0.78 0.16 155 / 0.12)',
-                borderColor: 'oklch(0.78 0.16 155 / 0.3)',
-                color: 'var(--ok)',
-              } : {}}
-            >
-              {saved ? '✓ Saved to Drive' : 'Save to Drive'}
-            </button>
-          )}
+      {/* Platform metrics */}
+      {metrics && mode === 'platform' && selectedPost && (
+        <PlatformMetricsCard metrics={metrics} platform={platform} />
+      )}
+
+      {/* Analysis cards */}
+      {analysis && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr 0.9fr', gap: 'var(--gap)' }}>
+            <HookCard hook={analysis.hook} />
+            <FormatCard analysis={analysis} />
+            <VerdictCard analysis={analysis} />
+          </div>
+          <RetentionCard analysis={analysis} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+            <ViralityCard factors={analysis.virality_factors} />
+            <NarrativeCard structure={analysis.narrative_structure} />
+          </div>
+          <ImprovementsCard items={analysis.suggested_improvements} />
+          {transcript && <TranscriptCard transcript={transcript} platform={platform} />}
+        </>
+      )}
+
+      {/* Empty state */}
+      {!analysis && selectedPost && mode === 'platform' && (
+        <div className="card" style={{ padding: 'var(--pad)', display: 'flex', alignItems: 'center', gap: 16, borderStyle: 'dashed', background: 'transparent' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', border: '1px solid var(--hairline)' }}>
+            <IconSparkles size={20} style={{ color: 'var(--text-mute)' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-2)', marginBottom: 2 }}>Ready when you are</div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
+              {platform === 'youtube'
+                ? 'Will fetch YouTube captions, then run Gemini analysis on the transcript.'
+                : 'Will analyze the caption text with Gemini using live IG metrics for context.'}
+            </div>
+          </div>
         </div>
       )}
     </div>

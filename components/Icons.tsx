@@ -117,6 +117,27 @@ export const IconSparkles = (p: IconProps) => (
   </Icon>
 )
 
+export const IconBolt = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 2L4.5 13H12L11 22L19.5 11H12L13 2z" />
+  </Icon>
+)
+
+export const IconEye = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+)
+
+export const IconClipboard = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M8 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2" />
+    <path d="M12 11h4M12 16h4M8 11h.01M8 16h.01" />
+  </Icon>
+)
+
 export const IconKey = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="8" cy="15" r="4" />
