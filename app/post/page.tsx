@@ -1,9 +1,54 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { upload } from '@vercel/blob/client'
 import StatusDot from '@/components/StatusDot'
 import { PostStatus } from '@/lib/types'
+
+async function uploadToBlob(file: File, onProgress: (pct: number) => void): Promise<string> {
+  const tokenRes = await fetch('/api/blob/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pathname: file.name }),
+  })
+  const tokenData = await tokenRes.json()
+  if (!tokenRes.ok || tokenData.error) throw new Error(tokenData.error || `Token failed: ${tokenRes.status}`)
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const url = `https://blob.vercel-storage.com/${encodeURIComponent(file.name)}`
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('authorization', `Bearer ${tokenData.token}`)
+    xhr.setRequestHeader('x-content-type', file.type || 'video/mp4')
+    xhr.setRequestHeader('x-api-version', '7')
+
+    let lastPct = -1
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return
+      const pct = Math.round((e.loaded / e.total) * 100)
+      if (pct >= lastPct + 5 || pct === 100) {
+        lastPct = pct
+        onProgress(pct)
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          resolve(data.url)
+        } catch {
+          reject(new Error(`Bad response: ${xhr.responseText.slice(0, 200)}`))
+        }
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText.slice(0, 200)}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Network error during upload'))
+    xhr.ontimeout = () => reject(new Error('Upload timed out'))
+    xhr.timeout = 5 * 60 * 1000
+    xhr.send(file)
+  })
+}
 
 type Platform = 'youtube' | 'instagram' | 'tiktok'
 
@@ -112,25 +157,9 @@ export default function PostPage() {
     // Step 1: Upload once to Vercel Blob
     let blobUrl: string
     try {
-      let lastPct = -1
-      const blob = await Promise.race([
-        upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/blob/upload',
-          multipart: true,
-          onUploadProgress: ({ percentage }: { percentage: number }) => {
-            const pct = Math.round(percentage)
-            if (pct >= lastPct + 5 || pct === 100) {
-              lastPct = pct
-              setAllStatus('uploading', `uploading ${pct}%...`)
-            }
-          },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Upload timed out — please try again')), 180_000)
-        ),
-      ])
-      blobUrl = blob.url
+      blobUrl = await uploadToBlob(file, pct => {
+        setAllStatus('uploading', `uploading ${pct}%...`)
+      })
       setAllStatus('uploading', 'sending to platforms...')
     } catch (e) {
       const msg = `Upload failed: ${String(e)}`
