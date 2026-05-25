@@ -44,7 +44,7 @@ export async function GET() {
 
         // Standard metrics — always available
         try {
-          const r = await fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&access_token=${ig_access_token}`)
+          const r = await fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&period=lifetime&access_token=${ig_access_token}`)
           const d = await r.json()
           if (!d.error) {
             for (const m of d.data ?? []) {
@@ -57,7 +57,7 @@ export async function GET() {
         // Reels-only watch-time metrics — separate call so a failure doesn't kill standard metrics
         if (item.media_type === 'REEL') {
           try {
-            const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&access_token=${ig_access_token}`)
+            const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`)
             const d = await r.json()
             if (!d.error) {
               for (const m of d.data ?? []) {
@@ -76,6 +76,7 @@ export async function GET() {
           thumbnail: item.thumbnail_url,
           metrics: {
             platform: 'instagram' as const,
+            mediaType: item.media_type,
             plays: insightMetrics['plays'],
             reach: insightMetrics['reach'],
             saves: insightMetrics['saved'],

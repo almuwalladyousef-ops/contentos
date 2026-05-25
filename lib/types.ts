@@ -50,6 +50,7 @@ export interface Credentials {
 
 export interface PlatformMetricsData {
   platform: 'instagram' | 'youtube'
+  mediaType?: string
   plays?: number
   views?: number
   likes?: number

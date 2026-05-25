@@ -623,10 +623,14 @@ function RetentionCard({ analysis, metrics, retentionError }: { analysis: VideoA
               <div style={{ marginTop: 4, color: 'var(--bad)' }}>API error: {retentionError}</div>
             )}
             {!retentionError && metrics?.platform === 'instagram' && (() => {
+              const isReel = metrics?.mediaType === 'REEL'
+              if (!isReel) {
+                return <div style={{ marginTop: 4 }}>This is a regular Video post — Instagram only exposes avg watch time for Reels.</div>
+              }
               const missing = []
               if (!metrics?.avgWatchTimeMs) missing.push('avg_watch_time')
               if (!metrics?.videoDurationSec) missing.push('video_duration')
-              return <div style={{ marginTop: 4 }}>Instagram didn&apos;t return: {missing.join(', ') || 'unknown field'}. Post may have too few views or not be a Reel.</div>
+              return <div style={{ marginTop: 4 }}>Reel didn&apos;t return: {missing.join(', ')}. Instagram requires a minimum view count before exposing these metrics.</div>
             })()}
           </div>
         </div>
