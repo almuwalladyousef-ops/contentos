@@ -117,6 +117,7 @@ export default function PostPage() {
         upload(file.name, file, {
           access: 'public',
           handleUploadUrl: '/api/blob/upload',
+          multipart: true,
           onUploadProgress: ({ percentage }: { percentage: number }) => {
             const pct = Math.round(percentage)
             if (pct >= lastPct + 5 || pct === 100) {
@@ -126,7 +127,7 @@ export default function PostPage() {
           },
         }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Upload timed out — please try again')), 90_000)
+          setTimeout(() => reject(new Error('Upload timed out — please try again')), 180_000)
         ),
       ])
       blobUrl = blob.url
