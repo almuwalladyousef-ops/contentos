@@ -52,8 +52,10 @@ export default function PostPage() {
     })
   }
 
-  async function postYouTube(blobUrl: string): Promise<string | null> {
-    if (!file) return null
+  type PlatResult = { success: true; url?: string } | { success: false; error: string }
+
+  async function postYouTube(blobUrl: string): Promise<{ url: string | null; result: PlatResult }> {
+    if (!file) return { url: null, result: { success: false, error: 'No file' } }
     setStatus('youtube', 'uploading', 'posting to YouTube...')
 
     const res = await fetch('/api/post/youtube', {
@@ -69,13 +71,13 @@ export default function PostPage() {
       }),
     })
     const data = await safeJson(res)
-    if (data.error) { setStatus('youtube', 'failed', data.error); return null }
+    if (data.error) { setStatus('youtube', 'failed', data.error); return { url: null, result: { success: false, error: data.error } } }
     setStatus('youtube', 'success')
-    return data.videoUrl ?? null
+    return { url: data.videoUrl ?? null, result: { success: true, url: data.videoUrl ?? undefined } }
   }
 
-  async function postInstagram(blobUrl: string): Promise<string | null> {
-    if (!file) return null
+  async function postInstagram(blobUrl: string): Promise<{ url: string | null; result: PlatResult }> {
+    if (!file) return { url: null, result: { success: false, error: 'No file' } }
     setStatus('instagram', 'uploading', 'posting to Instagram...')
 
     const res = await fetch('/api/post/instagram', {
@@ -84,13 +86,13 @@ export default function PostPage() {
       body: JSON.stringify({ videoUrl: blobUrl, caption }),
     })
     const data = await safeJson(res)
-    if (data.error) { setStatus('instagram', 'failed', data.error); return null }
+    if (data.error) { setStatus('instagram', 'failed', data.error); return { url: null, result: { success: false, error: data.error } } }
     setStatus('instagram', 'success')
-    return data.postUrl ?? null
+    return { url: data.postUrl ?? null, result: { success: true, url: data.postUrl ?? undefined } }
   }
 
-  async function postTikTok(blobUrl: string): Promise<string | null> {
-    if (!file) return null
+  async function postTikTok(blobUrl: string): Promise<{ url: null; result: PlatResult }> {
+    if (!file) return { url: null, result: { success: false, error: 'No file' } }
     setStatus('tiktok', 'uploading', 'posting to TikTok...')
 
     const res = await fetch('/api/post/tiktok', {
@@ -99,9 +101,9 @@ export default function PostPage() {
       body: JSON.stringify({ blobUrl, caption, privacy: ttPrivacy, size: file.size }),
     })
     const data = await safeJson(res)
-    if (data.error) { setStatus('tiktok', 'failed', data.error); return null }
+    if (data.error) { setStatus('tiktok', 'failed', data.error); return { url: null, result: { success: false, error: data.error } } }
     setStatus('tiktok', 'success')
-    return null
+    return { url: null, result: { success: true } }
   }
 
   async function handlePostAll() {
@@ -136,17 +138,33 @@ export default function PostPage() {
     }
 
     // Step 2: Post to all platforms in parallel using the blob URL
-    const [ytUrl, igUrl] = await Promise.all([
-      postYouTube(blobUrl).catch(e => { setStatus('youtube', 'failed', String(e)); return null }),
-      postInstagram(blobUrl).catch(e => { setStatus('instagram', 'failed', String(e)); return null }),
-      postTikTok(blobUrl).catch(e => { setStatus('tiktok', 'failed', String(e)); return null }),
+    const errResult = (e: unknown, p: Platform): { url: null; result: PlatResult } => {
+      setStatus(p, 'failed', String(e))
+      return { url: null, result: { success: false, error: String(e) } }
+    }
+    const [yt, ig, tt] = await Promise.all([
+      postYouTube(blobUrl).catch(e => errResult(e, 'youtube')),
+      postInstagram(blobUrl).catch(e => errResult(e, 'instagram')),
+      postTikTok(blobUrl).catch(e => errResult(e, 'tiktok')),
     ])
+    const ytUrl = yt.url
+    const igUrl = ig.url
 
     // Step 3: Delete blob
     fetch('/api/blob/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: blobUrl }),
+    }).catch(() => {})
+
+    // Send email notification with per-platform results
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoName: file.name,
+        results: { youtube: yt.result, instagram: ig.result, tiktok: tt.result },
+      }),
     }).catch(() => {})
 
     const platforms: Platform[] = []

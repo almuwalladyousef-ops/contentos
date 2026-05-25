@@ -14,6 +14,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             'profile',
             'https://www.googleapis.com/auth/drive.file',
             'https://www.googleapis.com/auth/youtube.upload',
+            'https://www.googleapis.com/auth/gmail.send',
           ].join(' '),
           access_type: 'offline',
           prompt: 'consent',
