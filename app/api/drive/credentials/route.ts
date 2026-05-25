@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as Credentials & { slot?: string }
     const slot = body.slot ?? status.active
-    const { slot: _slot, ...creds } = body
+    const { slot: _unused, ...creds } = body; void _unused
     const { rootId } = await ensureFolderStructure(account.accessToken)
     await saveCredentials(account.accessToken, rootId, creds as Credentials, slot)
     return NextResponse.json({ ok: true })

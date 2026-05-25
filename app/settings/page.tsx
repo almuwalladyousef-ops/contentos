@@ -93,7 +93,7 @@ function SettingsContent() {
   async function handleTtDisconnect() {
     setDisconnecting(true)
     try {
-      const { tt_access_token: _, ...rest } = creds
+      const { tt_access_token: _unused, ...rest } = creds; void _unused
       await fetch('/api/drive/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

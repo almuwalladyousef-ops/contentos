@@ -12,6 +12,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'ContentOS',
   description: 'Post and analyze your videos',
+  other: {
+    'tiktok-developers-site-verification': 'YGkyP6kFDJsdHfcKAN8wKtb0NyWuQvQO',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

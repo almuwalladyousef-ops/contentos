@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import AnalysisResult from '@/components/AnalysisResult'
 import PlatformMetrics from '@/components/PlatformMetrics'
 import { VideoAnalysis, PlatformPost, PlatformMetricsData } from '@/lib/types'
@@ -118,20 +118,6 @@ export default function AnalysisPage() {
   const [metrics, setMetrics] = useState<PlatformMetricsData | null>(null)
 
   const isLarge = file ? file.size > 25 * 1024 * 1024 : false
-
-  // Fetch posts when platform tab changes
-  useEffect(() => {
-    if (mode !== 'platform') return
-    setSelectedPost(null)
-    setPosts([])
-    setPostsError('')
-    setAnalysis(null)
-    setTranscript('')
-    setMetrics(null)
-    setError('')
-    fetchPosts(platform)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, mode])
 
   async function fetchPosts(p: Platform) {
     setLoadingPosts(true)
@@ -304,6 +290,12 @@ export default function AnalysisPage() {
                   setError('')
                   setMetrics(null)
                   setSaved(false)
+                  if (m === 'platform') {
+                    setSelectedPost(null)
+                    setPosts([])
+                    setPostsError('')
+                    fetchPosts(platform)
+                  }
                 }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                   mode === m
@@ -324,7 +316,17 @@ export default function AnalysisPage() {
                 {(['instagram', 'youtube'] as Platform[]).map(p => (
                   <button
                     key={p}
-                    onClick={() => setPlatform(p)}
+                    onClick={() => {
+                      setPlatform(p)
+                      setSelectedPost(null)
+                      setPosts([])
+                      setPostsError('')
+                      setAnalysis(null)
+                      setTranscript('')
+                      setMetrics(null)
+                      setError('')
+                      fetchPosts(p)
+                    }}
                     className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors capitalize ${
                       platform === p
                         ? 'border-primary text-primary bg-primary/10'

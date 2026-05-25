@@ -39,7 +39,7 @@ export async function GET() {
         like_count?: number
         comments_count?: number
       }) => {
-        let insightMetrics: Record<string, number> = {}
+        const insightMetrics: Record<string, number> = {}
         try {
           const insightsRes = await fetch(
             `${base}/${item.id}/insights?metric=reach,plays,saved,shares,ig_reels_avg_watch_time&access_token=${ig_access_token}`
