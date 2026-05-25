@@ -5,7 +5,7 @@ import { upload } from '@vercel/blob/client'
 import StatusDot from '@/components/StatusDot'
 import {
   IconUpload, IconFilm, IconX, IconArrowRight, IconClock,
-  IconCheck, LogoYouTube, LogoInstagram, LogoTikTok, PlatformIcon,
+  IconCheck, IconSparkles, LogoYouTube, LogoInstagram, LogoTikTok, PlatformIcon,
 } from '@/components/Icons'
 import { PostStatus } from '@/lib/types'
 
@@ -233,7 +233,9 @@ function PlatformToggle({ platform, enabled, locked, onToggle, status, detail }:
         </div>
       </div>
       {!locked && (
-        <Toggle checked={enabled} onChange={() => onToggle()} />
+        <div onClick={e => e.stopPropagation()}>
+          <Toggle checked={enabled} onChange={() => onToggle()} />
+        </div>
       )}
     </button>
   )
@@ -255,6 +257,10 @@ export default function PostPage() {
   const [statuses, setStatuses] = useState<Record<Platform, PlatStatus>>(initialStatus())
   const [running, setRunning] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [suggestingCaptions, setSuggestingCaptions] = useState(false)
+  const [suggestingHashtags, setSuggestingHashtags] = useState(false)
+  const [suggestedCaptions, setSuggestedCaptions] = useState<string[]>([])
+  const [suggestedHashtags, setSuggestedHashtags] = useState<string[]>([])
 
   useEffect(() => {
     if (videoType === 'long') {
@@ -327,6 +333,26 @@ export default function PostPage() {
     if (data.error) { setStatus('tiktok', 'failed', data.error); return { url: null, result: { success: false, error: data.error } } }
     setStatus('tiktok', 'success')
     return { url: null, result: { success: true } }
+  }
+
+  async function suggestCaptions() {
+    setSuggestingCaptions(true)
+    try {
+      const res = await fetch('/api/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'captions', context: caption || undefined }) })
+      const data = await res.json()
+      if (data.captions) setSuggestedCaptions(data.captions)
+    } catch {}
+    setSuggestingCaptions(false)
+  }
+
+  async function suggestHashtags() {
+    setSuggestingHashtags(true)
+    try {
+      const res = await fetch('/api/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'hashtags', context: caption || undefined }) })
+      const data = await res.json()
+      if (data.hashtags) setSuggestedHashtags(data.hashtags)
+    } catch {}
+    setSuggestingHashtags(false)
   }
 
   async function handlePostAll() {
@@ -536,6 +562,55 @@ export default function PostPage() {
               </div>
             </div>
           </div>
+
+          {/* Gemini AI suggestions */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconSparkles size={12} style={{ color: 'var(--accent)' }} /> GEMINI ·
+            </span>
+            <button className="btn ghost tiny" onClick={suggestCaptions} disabled={suggestingCaptions} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconSparkles size={11} />
+              {suggestingCaptions ? 'generating…' : 'suggest captions'}
+            </button>
+            <button className="btn ghost tiny" onClick={suggestHashtags} disabled={suggestingHashtags} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconSparkles size={11} />
+              {suggestingHashtags ? 'generating…' : 'suggest hashtags'}
+            </button>
+          </div>
+
+          {/* Suggested captions */}
+          {suggestedCaptions.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="micro">Suggested captions — click to use</span>
+              {suggestedCaptions.map((c, i) => (
+                <button key={i} onClick={() => { setCaption(c); setSuggestedCaptions([]) }} style={{
+                  padding: '9px 12px', borderRadius: 8, textAlign: 'left',
+                  background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+                  fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5,
+                  transition: 'background 120ms ease',
+                }}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Suggested hashtags */}
+          {suggestedHashtags.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span className="micro">Suggested hashtags — click to add</span>
+                <button className="btn ghost tiny" onClick={() => setSuggestedHashtags([])}>dismiss</button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {suggestedHashtags.map(tag => (
+                  <button key={tag} onClick={() => { addTag(tag); setSuggestedHashtags(prev => prev.filter(t => t !== tag)) }} className="mono" style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'background 120ms ease' }}>
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Platform toggles */}
