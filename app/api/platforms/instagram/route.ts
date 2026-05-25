@@ -42,19 +42,20 @@ export async function GET() {
       }) => {
         const insightMetrics: Record<string, number> = {}
 
-        // Run all three fetches in parallel: standard metrics, watch-time metrics,
-        // and a per-item duration fetch (fallback for when the list endpoint omits video_duration).
-        const [standardRes, watchRes, durationRes] = await Promise.allSettled([
-          fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&period=lifetime&access_token=${ig_access_token}`),
-          // Attempted for all video types — Instagram inconsistently returns media_type='VIDEO' for some Reels.
+        // Run four fetches in parallel.
+        // `plays` is intentionally separated from universal metrics — requesting it alongside
+        // reach/saved/shares causes the entire call to fail when Instagram classifies the post
+        // as VIDEO (not REEL), because `plays` is a Reel-only metric in v21.0.
+        const [standardRes, playsRes, watchRes, durationRes] = await Promise.allSettled([
+          fetch(`${base}/${item.id}/insights?metric=reach,saved,shares&period=lifetime&access_token=${ig_access_token}`),
+          fetch(`${base}/${item.id}/insights?metric=plays,video_views&period=lifetime&access_token=${ig_access_token}`),
           fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`),
-          // video_duration is not reliably returned in the list response, so fetch it directly.
           item.video_duration == null
             ? fetch(`${base}/${item.id}?fields=video_duration&access_token=${ig_access_token}`)
             : Promise.resolve(null),
         ])
 
-        for (const settled of [standardRes, watchRes]) {
+        for (const settled of [standardRes, playsRes, watchRes]) {
           if (settled.status === 'fulfilled') {
             try {
               const d = await settled.value.json()
@@ -87,14 +88,15 @@ export async function GET() {
           metrics: {
             platform: 'instagram' as const,
             mediaType: item.media_type,
-            plays: insightMetrics['plays'],
+            plays: insightMetrics['plays']
+              ?? insightMetrics['video_views']
+              ?? (insightMetrics['ig_reels_video_view_total_time'] && insightMetrics['ig_reels_avg_watch_time']
+                ? Math.round(insightMetrics['ig_reels_video_view_total_time'] / insightMetrics['ig_reels_avg_watch_time'])
+                : undefined),
             reach: insightMetrics['reach'],
             saves: insightMetrics['saved'],
             shares: insightMetrics['shares'],
-            avgWatchTimeMs: insightMetrics['ig_reels_avg_watch_time']
-              ?? (insightMetrics['ig_reels_video_view_total_time'] && insightMetrics['plays']
-                ? insightMetrics['ig_reels_video_view_total_time'] / insightMetrics['plays']
-                : undefined),
+            avgWatchTimeMs: insightMetrics['ig_reels_avg_watch_time'],
             likes: item.like_count,
             comments: item.comments_count,
             videoDurationSec,
