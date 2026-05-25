@@ -18,9 +18,16 @@ function formatWatchTime(ms?: number): string {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 p-3 bg-surface2 rounded-lg border border-border min-w-[80px]">
-      <span className="text-lg font-bold text-text">{value}</span>
-      <span className="text-xs text-text-muted uppercase tracking-wider font-semibold">{label}</span>
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+      padding: '10px 14px',
+      background: 'var(--surface-2)',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      minWidth: 74,
+    }}>
+      <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{value}</span>
+      <span className="micro" style={{ fontSize: 9.5 }}>{label}</span>
     </div>
   )
 }
@@ -29,28 +36,33 @@ export default function PlatformMetrics({ metrics }: { metrics: PlatformMetricsD
   const isYT = metrics.platform === 'youtube'
 
   return (
-    <div className="bg-surface rounded-xl border border-border overflow-hidden shadow-lg">
-      <div className="bg-surface2 px-5 py-4 border-b border-border flex items-center gap-2">
-        <span className="text-xs font-bold text-text-muted tracking-widest uppercase">
-          {isYT ? 'YouTube' : 'Instagram'} Performance
-        </span>
+    <div style={{
+      borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)',
+      overflow: 'hidden',
+      background: 'oklch(0.215 0.014 255 / 0.5)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }}>
+      <div style={{ background: 'var(--surface-2)', padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+        <span className="micro">{isYT ? 'YouTube' : 'Instagram'} Performance</span>
       </div>
-      <div className="px-5 py-4">
-        <div className="flex flex-wrap gap-3">
+      <div style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {isYT ? (
             <>
-              <Stat label="Views" value={formatNum(metrics.views)} />
-              <Stat label="Likes" value={formatNum(metrics.likes)} />
+              <Stat label="Views"    value={formatNum(metrics.views)} />
+              <Stat label="Likes"    value={formatNum(metrics.likes)} />
               <Stat label="Comments" value={formatNum(metrics.comments)} />
             </>
           ) : (
             <>
-              <Stat label="Plays" value={formatNum(metrics.plays)} />
-              <Stat label="Reach" value={formatNum(metrics.reach)} />
-              <Stat label="Likes" value={formatNum(metrics.likes)} />
+              <Stat label="Plays"    value={formatNum(metrics.plays)} />
+              <Stat label="Reach"    value={formatNum(metrics.reach)} />
+              <Stat label="Likes"    value={formatNum(metrics.likes)} />
               <Stat label="Comments" value={formatNum(metrics.comments)} />
-              <Stat label="Saves" value={formatNum(metrics.saves)} />
-              <Stat label="Shares" value={formatNum(metrics.shares)} />
+              <Stat label="Saves"    value={formatNum(metrics.saves)} />
+              <Stat label="Shares"   value={formatNum(metrics.shares)} />
               {metrics.avgWatchTimeMs !== undefined && (
                 <Stat label="Avg Watch" value={formatWatchTime(metrics.avgWatchTimeMs)} />
               )}

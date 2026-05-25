@@ -2,13 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import AnalysisResult from '@/components/AnalysisResult'
+import { PlatformIcon } from '@/components/Icons'
 import { PostRecord, VideoAnalysis } from '@/lib/types'
-
-const platformTag: Record<string, string> = {
-  youtube: '[YT]',
-  instagram: '[IG]',
-  tiktok: '[TT]',
-}
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<PostRecord[]>([])
@@ -43,93 +38,140 @@ export default function HistoryPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-mute)', fontSize: 13 }}>
+        Loading…
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-5xl mx-auto w-full">
-      {loading ? (
-        <div className="text-text-muted text-sm flex items-center justify-center py-20">Loading...</div>
-      ) : history.length === 0 ? (
-        <div className="text-text-muted text-sm flex flex-col items-center justify-center py-20 border border-dashed border-border rounded-2xl bg-surface2/50">
-          <p className="mb-2">No history yet</p>
+    <div style={{ maxWidth: 900, width: '100%', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h1 className="h1">History</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>{history.length} post{history.length !== 1 ? 's' : ''} recorded</p>
+        </div>
+        {history.length > 0 && (
+          <button onClick={handleClear} className="btn danger tiny">
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {history.length === 0 ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 20px',
+          border: '1px dashed var(--border)',
+          borderRadius: 'var(--radius)',
+          color: 'var(--text-mute)',
+          fontSize: 13,
+        }}>
+          No history yet
         </div>
       ) : (
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-lg mb-8">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface2 border-b border-border">
-                  {['DATE', 'VIDEO', 'PLATFORMS', 'CAPTION'].map(h => (
-                    <th key={h} className="py-4 px-6 text-xs font-semibold text-text-muted tracking-wider uppercase">
-                      {h}
-                    </th>
+        <div className="card" style={{ overflow: 'hidden' }}>
+          {/* Table header */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr 100px 1fr',
+            padding: '10px 20px',
+            background: 'var(--surface-2)',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            {['DATE', 'VIDEO', 'PLATFORMS', 'CAPTION'].map(h => (
+              <span key={h} className="micro" style={{ fontSize: 10 }}>{h}</span>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {history.map((entry, idx) => (
+            <React.Fragment key={entry.id}>
+              <div
+                onClick={() => handleExpand(entry)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '120px 1fr 100px 1fr',
+                  padding: '14px 20px',
+                  borderBottom: idx < history.length - 1 || expanded === entry.id ? '1px solid var(--hairline)' : 'none',
+                  cursor: 'pointer',
+                  background: expanded === entry.id ? 'var(--surface-2)' : 'transparent',
+                  transition: 'background 120ms ease',
+                  alignItems: 'center',
+                }}
+                onMouseEnter={e => {
+                  if (expanded !== entry.id) (e.currentTarget as HTMLDivElement).style.background = 'oklch(0.215 0.014 255 / 0.4)'
+                }}
+                onMouseLeave={e => {
+                  if (expanded !== entry.id) (e.currentTarget as HTMLDivElement).style.background = 'transparent'
+                }}
+              >
+                <span style={{ fontSize: 12, color: 'var(--text-mute)', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(entry.date).toLocaleDateString()}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 16 }}>
+                  {entry.video_name}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {entry.platforms.map(p => (
+                    <span key={p} style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 24, height: 24,
+                      borderRadius: 6,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--hairline)',
+                      color: 'var(--text-2)',
+                    }}>
+                      <PlatformIcon platform={p} size={13} />
+                    </span>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {history.map(entry => (
-                  <React.Fragment key={entry.id}>
-                    <tr
-                      onClick={() => handleExpand(entry)}
-                      className={`cursor-pointer transition-colors ${
-                        expanded === entry.id ? 'bg-surface2/80' : 'hover:bg-surface2/50'
-                      }`}
-                    >
-                      <td className="py-4 px-6 text-sm text-text-muted whitespace-nowrap">
-                        {new Date(entry.date).toLocaleDateString()}
-                      </td>
-                      <td className="py-4 px-6 text-sm font-medium text-text">
-                        {entry.video_name}
-                      </td>
-                      <td className="py-4 px-6 text-xs whitespace-nowrap">
-                        <div className="flex gap-2">
-                          {entry.platforms.map(p => (
-                            <span key={p} className="bg-bg border border-border text-text-muted px-2 py-1 rounded-md tracking-wider">
-                              {platformTag[p]}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-text-muted max-w-xs truncate">
-                        {entry.caption?.slice(0, 80) || '—'}
-                      </td>
-                    </tr>
-                    {expanded === entry.id && (
-                      <tr key={`${entry.id}-expanded`} className="bg-bg/50">
-                        <td colSpan={4} className="p-6 border-b border-border">
-                          <div className="flex gap-4 mb-6 flex-wrap">
-                            {entry.youtube_url && (
-                              <a href={entry.youtube_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover text-sm font-medium underline underline-offset-2 transition-colors">
-                                YouTube ↗
-                              </a>
-                            )}
-                            {entry.instagram_url && (
-                              <a href={entry.instagram_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover text-sm font-medium underline underline-offset-2 transition-colors">
-                                Instagram ↗
-                              </a>
-                            )}
-                          </div>
-                          {analyses[entry.id] ? (
-                            <AnalysisResult analysis={analyses[entry.id]} />
-                          ) : entry.analysis_file_id ? (
-                            <div className="text-text-muted text-sm animate-pulse">Loading analysis...</div>
-                          ) : (
-                            <div className="text-text-muted text-sm italic">No analysis saved for this entry</div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-6 bg-surface2 border-t border-border flex justify-end">
-            <button
-              onClick={handleClear}
-              className="bg-surface hover:bg-red/10 text-red font-medium py-2 px-4 rounded-lg border border-red/30 transition-colors focus:ring-2 focus:ring-red focus:outline-none text-sm"
-            >
-              Clear History
-            </button>
-          </div>
+                </div>
+                <span style={{ fontSize: 12.5, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {entry.caption?.slice(0, 80) || '—'}
+                </span>
+              </div>
+
+              {/* Expanded row */}
+              {expanded === entry.id && (
+                <div style={{ padding: '20px 24px', background: 'var(--bg-2)', borderBottom: idx < history.length - 1 ? '1px solid var(--hairline)' : 'none' }}>
+                  {(entry.youtube_url || entry.instagram_url) && (
+                    <div style={{ display: 'flex', gap: 14, marginBottom: 18 }}>
+                      {entry.youtube_url && (
+                        <a
+                          href={entry.youtube_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                        >
+                          YouTube ↗
+                        </a>
+                      )}
+                      {entry.instagram_url && (
+                        <a
+                          href={entry.instagram_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                        >
+                          Instagram ↗
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {analyses[entry.id] ? (
+                    <AnalysisResult analysis={analyses[entry.id]} />
+                  ) : entry.analysis_file_id ? (
+                    <div style={{ fontSize: 13, color: 'var(--text-mute)' }}>Loading analysis…</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: 'var(--text-mute)', fontStyle: 'italic' }}>No analysis saved for this entry</div>
+                  )}
+                </div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
       )}
     </div>

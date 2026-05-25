@@ -3,9 +3,10 @@
 import { useRef, useState } from 'react'
 import AnalysisResult from '@/components/AnalysisResult'
 import PlatformMetrics from '@/components/PlatformMetrics'
+import { IconUpload } from '@/components/Icons'
 import { VideoAnalysis, PlatformPost, PlatformMetricsData } from '@/lib/types'
 
-// ── Upload path helpers ────────────────────────────────────────────────────
+// ── WAV encoder ───────────────────────────────────────────────────────────────
 
 function encodeWAV(audioBuffer: AudioBuffer): Blob {
   const numChannels = 1
@@ -38,13 +39,10 @@ function encodeWAV(audioBuffer: AudioBuffer): Blob {
   return new Blob([buffer], { type: 'audio/wav' })
 }
 
-// ── Post card ──────────────────────────────────────────────────────────────
+// ── Post card ─────────────────────────────────────────────────────────────────
 
 function PostCard({
-  post,
-  platform,
-  selected,
-  onClick,
+  post, platform, selected, onClick,
 }: {
   post: PlatformPost
   platform: 'instagram' | 'youtube'
@@ -60,27 +58,36 @@ function PostCard({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left flex gap-3 p-3 rounded-xl border transition-all ${
-        selected
-          ? 'border-primary bg-primary/10'
-          : 'border-border bg-surface2 hover:border-primary/40 hover:bg-surface2/80'
-      }`}
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        display: 'flex',
+        gap: 12,
+        padding: 12,
+        borderRadius: 10,
+        border: selected ? '1px solid var(--accent)' : '1px solid var(--border)',
+        background: selected ? 'oklch(0.80 0.16 80 / 0.08)' : 'var(--surface-2)',
+        transition: 'all 120ms ease',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => {
+        if (!selected) (e.currentTarget as HTMLButtonElement).style.borderColor = 'oklch(0.80 0.16 80 / 0.5)'
+      }}
+      onMouseLeave={e => {
+        if (!selected) (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'
+      }}
     >
       {post.thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={post.thumbnail}
-          alt=""
-          className="w-16 h-16 object-cover rounded-lg flex-shrink-0 bg-border"
-        />
+        <img src={post.thumbnail} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, flexShrink: 0, background: 'var(--border)' }} />
       ) : (
-        <div className="w-16 h-16 rounded-lg flex-shrink-0 bg-border flex items-center justify-center text-text-muted text-xs">
+        <div style={{ width: 60, height: 60, borderRadius: 8, flexShrink: 0, background: 'var(--border)', display: 'grid', placeItems: 'center', color: 'var(--text-mute)', fontSize: 11, fontWeight: 600 }}>
           {platform === 'youtube' ? 'YT' : 'IG'}
         </div>
       )}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-text leading-snug mb-1">{snippet}</p>
-        <div className="flex items-center gap-3 text-xs text-text-muted">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4, margin: '0 0 6px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{snippet}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, color: 'var(--text-mute)' }}>
           <span>{date}</span>
           {plays !== undefined && <span>{plays.toLocaleString()} {platform === 'youtube' ? 'views' : 'plays'}</span>}
           {likes !== undefined && <span>{likes.toLocaleString()} likes</span>}
@@ -90,13 +97,12 @@ function PostCard({
   )
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 type Mode = 'upload' | 'platform'
 type Platform = 'instagram' | 'youtube'
 
 export default function AnalysisPage() {
-  // shared
   const [mode, setMode] = useState<Mode>('platform')
   const [transcript, setTranscript] = useState('')
   const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null)
@@ -105,11 +111,9 @@ export default function AnalysisPage() {
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState('')
 
-  // upload mode
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
 
-  // platform mode
   const [platform, setPlatform] = useState<Platform>('instagram')
   const [posts, setPosts] = useState<PlatformPost[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
@@ -123,9 +127,7 @@ export default function AnalysisPage() {
     setLoadingPosts(true)
     setPostsError('')
     try {
-      const url = p === 'instagram'
-        ? '/api/platforms/instagram'
-        : '/api/platforms/youtube/videos'
+      const url = p === 'instagram' ? '/api/platforms/instagram' : '/api/platforms/youtube/videos'
       const res = await fetch(url)
       const data = await res.json()
       if (data.error) { setPostsError(data.error); return }
@@ -136,8 +138,6 @@ export default function AnalysisPage() {
       setLoadingPosts(false)
     }
   }
-
-  // ── Upload mode run ──────────────────────────────────────────────────────
 
   async function handleUploadRun() {
     if (!file) return
@@ -187,8 +187,6 @@ export default function AnalysisPage() {
     }
   }
 
-  // ── Platform mode run ────────────────────────────────────────────────────
-
   async function handlePlatformRun() {
     if (!selectedPost) return
     setRunning(true)
@@ -209,7 +207,6 @@ export default function AnalysisPage() {
         text = tData.transcript
         setTranscript(text)
       } else {
-        // Instagram: use caption text
         text = selectedPost.caption ?? ''
         if (!text) throw new Error('This post has no caption text to analyze.')
         setTranscript(text)
@@ -232,8 +229,6 @@ export default function AnalysisPage() {
       setRunning(false)
     }
   }
-
-  // ── Save ─────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     if (!analysis || !transcript) return
@@ -273,201 +268,241 @@ export default function AnalysisPage() {
   const canRun = mode === 'upload' ? !!file && !running : !!selectedPost && !running
 
   return (
-    <div className="max-w-3xl mx-auto w-full">
-      <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-lg mb-8">
-        <div className="p-6 sm:p-8">
-          <h1 className="text-2xl font-bold text-text mb-6">Analyze Video Content</h1>
+    <div style={{ maxWidth: 720, width: '100%', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="h1">Analysis</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>Transcribe and analyze video content with AI</p>
+      </div>
 
-          {/* Mode tabs */}
-          <div className="flex gap-1 p-1 bg-surface2 rounded-xl border border-border mb-6 w-fit">
-            {(['platform', 'upload'] as Mode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMode(m)
-                  setAnalysis(null)
-                  setTranscript('')
-                  setError('')
-                  setMetrics(null)
-                  setSaved(false)
-                  if (m === 'platform') {
+      <div className="card" style={{ padding: 24, marginBottom: 16 }}>
+        {/* Mode tabs */}
+        <div style={{
+          display: 'flex',
+          padding: 3,
+          background: 'var(--surface)',
+          border: '1px solid var(--hairline)',
+          borderRadius: 10,
+          marginBottom: 20,
+          width: 'fit-content',
+        }}>
+          {(['platform', 'upload'] as Mode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m)
+                setAnalysis(null)
+                setTranscript('')
+                setError('')
+                setMetrics(null)
+                setSaved(false)
+                if (m === 'platform') {
+                  setSelectedPost(null)
+                  setPosts([])
+                  setPostsError('')
+                  fetchPosts(platform)
+                }
+              }}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 7,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: mode === m ? 'var(--text)' : 'var(--text-mute)',
+                background: mode === m ? 'var(--surface-3)' : 'transparent',
+                transition: 'all 120ms ease',
+                letterSpacing: '0.01em',
+              }}
+            >
+              {m === 'platform' ? 'From Platform' : 'Upload File'}
+            </button>
+          ))}
+        </div>
+
+        {/* Platform mode */}
+        {mode === 'platform' && (
+          <div style={{ marginBottom: 20 }}>
+            {/* Platform selector */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              {(['instagram', 'youtube'] as Platform[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setPlatform(p)
                     setSelectedPost(null)
                     setPosts([])
                     setPostsError('')
-                    fetchPosts(platform)
-                  }
-                }}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === m
-                    ? 'bg-primary text-white shadow'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                {m === 'platform' ? 'From Platform' : 'Upload File'}
-              </button>
-            ))}
-          </div>
+                    setAnalysis(null)
+                    setTranscript('')
+                    setMetrics(null)
+                    setError('')
+                    fetchPosts(p)
+                  }}
+                  style={{
+                    padding: '5px 14px',
+                    borderRadius: 7,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    border: platform === p ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    color: platform === p ? 'var(--accent)' : 'var(--text-dim)',
+                    background: platform === p ? 'oklch(0.80 0.16 80 / 0.1)' : 'transparent',
+                    transition: 'all 120ms ease',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {p === 'instagram' ? 'Instagram' : 'YouTube'}
+                </button>
+              ))}
+            </div>
 
-          {/* ── Platform mode ── */}
-          {mode === 'platform' && (
-            <div className="mb-6">
-              {/* Platform selector */}
-              <div className="flex gap-2 mb-4">
-                {(['instagram', 'youtube'] as Platform[]).map(p => (
-                  <button
-                    key={p}
+            {/* Post list */}
+            {loadingPosts ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 13, color: 'var(--text-mute)' }}>Loading posts…</div>
+            ) : postsError ? (
+              <div style={{
+                background: 'oklch(0.70 0.19 25 / 0.1)',
+                border: '1px solid oklch(0.70 0.19 25 / 0.3)',
+                color: 'var(--bad)',
+                padding: '10px 14px',
+                borderRadius: 8,
+                fontSize: 13,
+              }}>
+                {postsError}
+              </div>
+            ) : posts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 13, color: 'var(--text-mute)' }}>No recent posts found.</div>
+            ) : (
+              <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, paddingRight: 4 }}>
+                {posts.map(post => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    platform={platform}
+                    selected={selectedPost?.id === post.id}
                     onClick={() => {
-                      setPlatform(p)
-                      setSelectedPost(null)
-                      setPosts([])
-                      setPostsError('')
+                      setSelectedPost(post)
                       setAnalysis(null)
                       setTranscript('')
                       setMetrics(null)
                       setError('')
-                      fetchPosts(p)
+                      setSaved(false)
                     }}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors capitalize ${
-                      platform === p
-                        ? 'border-primary text-primary bg-primary/10'
-                        : 'border-border text-text-muted hover:text-text hover:border-primary/40'
-                    }`}
-                  >
-                    {p === 'instagram' ? 'Instagram' : 'YouTube'}
-                  </button>
+                  />
                 ))}
               </div>
+            )}
 
-              {/* Post list */}
-              {loadingPosts ? (
-                <div className="text-sm text-text-muted py-6 text-center">Loading posts…</div>
-              ) : postsError ? (
-                <div className="bg-red/10 border border-red/30 text-red px-4 py-3 rounded-lg text-sm">
-                  {postsError}
-                </div>
-              ) : posts.length === 0 ? (
-                <div className="text-sm text-text-muted py-6 text-center">No recent posts found.</div>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {posts.map(post => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      platform={platform}
-                      selected={selectedPost?.id === post.id}
-                      onClick={() => {
-                        setSelectedPost(post)
-                        setAnalysis(null)
-                        setTranscript('')
-                        setMetrics(null)
-                        setError('')
-                        setSaved(false)
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+            {!postsError && (
+              <p style={{ fontSize: 11.5, color: 'var(--text-mute)', marginTop: 8 }}>
+                {platform === 'instagram'
+                  ? 'Analysis uses the post caption. Metrics pulled live from Instagram.'
+                  : "Analysis uses YouTube's built-in captions. Reconnect Google account in Settings if captions fail."}
+              </p>
+            )}
+          </div>
+        )}
 
-              {platform === 'instagram' && !postsError && (
-                <p className="text-xs text-text-muted mt-2">
-                  Analysis uses the post caption. Metrics pulled live from Instagram.
-                </p>
-              )}
-              {platform === 'youtube' && !postsError && (
-                <p className="text-xs text-text-muted mt-2">
-                  Analysis uses YouTube&apos;s built-in captions. Reconnect Google account in Settings if captions fail.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* ── Upload mode ── */}
-          {mode === 'upload' && (
-            <div className="mb-6">
-              <div className="flex items-center gap-4">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="video/*,audio/*"
-                  className="hidden"
-                  onChange={e => {
-                    setFile(e.target.files?.[0] ?? null)
-                    setTranscript('')
-                    setAnalysis(null)
-                    setError('')
-                  }}
-                />
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="bg-surface2 hover:bg-border text-text font-medium py-2.5 px-5 rounded-lg border border-border transition-colors focus:ring-2 focus:ring-primary focus:outline-none"
-                >
-                  Browse Video
-                </button>
-                <span className={`text-sm truncate flex-1 ${file ? 'text-text' : 'text-text-muted italic'}`}>
-                  {file ? file.name : 'No file selected'}
-                </span>
-                {isLarge && (
-                  <span className="text-yellow text-xs font-semibold px-2 py-1 bg-yellow/10 rounded border border-yellow/20">
-                    Large file — audio will be extracted
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Run button */}
-          <button
-            onClick={mode === 'upload' ? handleUploadRun : handlePlatformRun}
-            disabled={!canRun}
-            className={`w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 shadow-md mb-6 ${
-              !canRun
-                ? 'bg-surface2 text-dim cursor-not-allowed border border-border'
-                : 'bg-primary hover:bg-primary-hover text-white cursor-pointer border border-transparent shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5'
-            }`}
-          >
-            {running ? (status || 'WORKING…') : 'ANALYZE'}
-          </button>
-
-          {error && (
-            <div className="bg-red/10 border border-red/30 text-red px-4 py-3 rounded-lg text-sm mb-6">
-              {error}
-            </div>
-          )}
-
-          {transcript && (
-            <div className="mb-8">
-              <div className="text-text-muted text-xs font-semibold mb-3 tracking-wider uppercase">
-                {mode === 'platform' && platform === 'instagram' ? 'Caption' : 'Transcript'}
-              </div>
-              <textarea
-                readOnly
-                value={transcript}
-                rows={6}
-                className="w-full bg-surface2 border border-border text-text rounded-xl p-4 text-sm leading-relaxed focus:outline-none resize-y"
+        {/* Upload mode */}
+        {mode === 'upload' && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*,audio/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  setFile(e.target.files?.[0] ?? null)
+                  setTranscript('')
+                  setAnalysis(null)
+                  setError('')
+                }}
               />
-            </div>
-          )}
-
-          {(metrics || analysis) && (
-            <div className="space-y-6">
-              {metrics && <PlatformMetrics metrics={metrics} />}
-              {analysis && <AnalysisResult analysis={analysis} />}
-              {analysis && (
-                <button
-                  onClick={handleSave}
-                  className={`w-full py-3 rounded-lg font-semibold text-sm transition-colors border ${
-                    saved
-                      ? 'bg-green/10 border-green/30 text-green'
-                      : 'bg-surface2 hover:bg-border border-border text-text'
-                  }`}
-                >
-                  {saved ? '✓ SAVED TO DRIVE' : 'SAVE TO DRIVE'}
-                </button>
+              <button className="btn" onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <IconUpload size={14} />
+                Browse file
+              </button>
+              <span style={{ fontSize: 13, color: file ? 'var(--text)' : 'var(--text-mute)', fontStyle: file ? 'normal' : 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {file ? file.name : 'No file selected'}
+              </span>
+              {isLarge && (
+                <span style={{
+                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em',
+                  padding: '3px 8px', borderRadius: 6,
+                  background: 'oklch(0.82 0.15 80 / 0.12)',
+                  border: '1px solid oklch(0.82 0.15 80 / 0.25)',
+                  color: 'var(--warn)',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Large — audio only
+                </span>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Run button */}
+        <button
+          onClick={mode === 'upload' ? handleUploadRun : handlePlatformRun}
+          disabled={!canRun}
+          className="btn primary"
+          style={{ width: '100%', height: 42, fontSize: 13 }}
+        >
+          {running ? (status || 'Working…') : 'Analyze →'}
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          background: 'oklch(0.70 0.19 25 / 0.1)',
+          border: '1px solid oklch(0.70 0.19 25 / 0.3)',
+          color: 'var(--bad)',
+          padding: '12px 16px',
+          borderRadius: 10,
+          fontSize: 13,
+          marginBottom: 16,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* Transcript */}
+      {transcript && (
+        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+          <div className="micro" style={{ marginBottom: 10 }}>
+            {mode === 'platform' && platform === 'instagram' ? 'Caption' : 'Transcript'}
+          </div>
+          <textarea
+            readOnly
+            value={transcript}
+            rows={6}
+            className="textarea"
+            style={{ resize: 'vertical', background: 'var(--surface)', cursor: 'default' }}
+          />
+        </div>
+      )}
+
+      {/* Results */}
+      {(metrics || analysis) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {metrics && <PlatformMetrics metrics={metrics} />}
+          {analysis && <AnalysisResult analysis={analysis} />}
+          {analysis && (
+            <button
+              onClick={handleSave}
+              className="btn"
+              style={saved ? {
+                background: 'oklch(0.78 0.16 155 / 0.12)',
+                borderColor: 'oklch(0.78 0.16 155 / 0.3)',
+                color: 'var(--ok)',
+              } : {}}
+            >
+              {saved ? '✓ Saved to Drive' : 'Save to Drive'}
+            </button>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

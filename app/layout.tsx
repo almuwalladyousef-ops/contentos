@@ -1,12 +1,20 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
-import Nav from '@/components/Nav'
+import AppShell from '@/components/AppShell'
 
-const inter = Inter({
+const geist = Geist({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-geist',
   display: 'swap',
+  weight: ['300', '400', '500', '600', '700'],
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+  display: 'swap',
+  weight: ['400', '500', '600'],
 })
 
 export const metadata: Metadata = {
@@ -19,12 +27,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable}`}>
-      <body className="min-h-screen flex flex-col font-sans bg-bg text-text selection:bg-primary/20">
-        <Nav />
-        <main className="flex-1 p-6 md:p-8 lg:p-10 max-w-7xl mx-auto w-full">
-          {children}
-        </main>
+    <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
+      <body>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   )
