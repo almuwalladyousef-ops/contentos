@@ -207,6 +207,17 @@ function SettingsContent() {
     if (!popup) window.location.href = url
   }
 
+  async function handleGoogleDisconnect() {
+    if (!confirm(`Disconnect ${accountStatus?.[slot]?.email ?? 'Google account'}? You'll need to reconnect to use Drive, YouTube, and Analytics.`)) return
+    setDisconnecting(true)
+    try {
+      await fetch('/api/auth/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot }) })
+      setAccountStatus(prev => prev ? { ...prev, [slot]: null } : prev)
+    } catch { /* ignore */ } finally {
+      setDisconnecting(false)
+    }
+  }
+
   async function handleTtDisconnect() {
     setDisconnecting(true)
     try {
@@ -298,11 +309,13 @@ function SettingsContent() {
 
       <IntegrationCard
         title="Google account"
-        sub="Drive · YouTube uploads"
+        sub="Drive · YouTube · Analytics"
         connected={!!acc}
         identity={acc?.email}
         actionLabel={acc ? 'Reconnect' : 'Connect Google'}
         onAction={() => { window.location.href = `/api/auth/connect?slot=${slot}` }}
+        secondaryAction={acc ? (disconnecting ? '…' : 'Disconnect') : null}
+        onSecondary={handleGoogleDisconnect}
         icon={<GoogleMark />}
       />
 
