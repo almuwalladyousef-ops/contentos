@@ -547,7 +547,7 @@ function RetentionCard({ analysis }: { analysis: VideoAnalysis }) {
     <div className="card" style={{ padding: 'var(--pad)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div className="micro" style={{ marginBottom: 4 }}>retention curve · modeled</div>
+          <div className="micro" style={{ marginBottom: 4 }}>retention curve · AI estimate</div>
           <h2 className="h2">Watch-through estimate</h2>
         </div>
         <span className="pill" style={{
@@ -557,6 +557,16 @@ function RetentionCard({ analysis }: { analysis: VideoAnalysis }) {
         }}>
           <span className="dot" style={{ background: riskColor, boxShadow: `0 0 8px ${riskColor}` }} />
           {r.risk_level} risk · {score}/100
+        </span>
+      </div>
+      <div style={{
+        marginBottom: 14, padding: '8px 12px', borderRadius: 8,
+        background: 'oklch(0.82 0.15 80 / 0.07)', border: '1px solid oklch(0.82 0.15 80 / 0.2)',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span style={{ fontSize: 13, color: 'var(--accent)' }}>⚠</span>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
+          This is a <strong>modeled estimate</strong> based on Gemini&apos;s retention risk assessment — not real YouTube Analytics watch-time data. Shape reflects typical {r.risk_level}-risk content patterns.
         </span>
       </div>
       <RetentionSparkline curve={curve} drops={fakeDrops} height={200} />
@@ -696,6 +706,9 @@ function ImprovementsCard({ items }: { items: string[] }) {
 function TranscriptCard({ transcript, platform }: { transcript: string; platform: string }) {
   const [open, setOpen] = useState(true)
   const isYT = platform === 'youtube'
+  const isUpload = platform === 'upload'
+  const sourceLabel = isUpload ? 'Groq Whisper transcription' : isYT ? 'YouTube caption track' : 'Instagram caption text'
+  const titleLabel = isUpload || isYT ? 'Transcript' : 'Caption'
   return (
     <div className="card" style={{ padding: 'var(--pad)' }}>
       <button
@@ -704,9 +717,9 @@ function TranscriptCard({ transcript, platform }: { transcript: string; platform
       >
         <div>
           <div className="micro" style={{ marginBottom: 4, textAlign: 'left' }}>
-            source · {isYT ? 'YouTube caption track' : 'Instagram caption text'}
+            source · {sourceLabel}
           </div>
-          <div className="h2" style={{ textAlign: 'left' }}>{isYT ? 'Transcript' : 'Caption'}</div>
+          <div className="h2" style={{ textAlign: 'left' }}>{titleLabel}</div>
         </div>
         <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{open ? 'hide' : 'show'} ↓</span>
       </button>
@@ -1062,6 +1075,11 @@ export default function AnalysisPage() {
         <PlatformMetricsCard metrics={metrics} platform={platform} />
       )}
 
+      {/* Transcript — shown as soon as it's available, before analysis cards */}
+      {transcript && (
+        <TranscriptCard transcript={transcript} platform={mode === 'upload' ? 'upload' : platform} />
+      )}
+
       {/* Analysis cards */}
       {analysis && (
         <>
@@ -1076,7 +1094,6 @@ export default function AnalysisPage() {
             <NarrativeCard structure={analysis.narrative_structure} />
           </div>
           <ImprovementsCard items={analysis.suggested_improvements} />
-          {transcript && <TranscriptCard transcript={transcript} platform={platform} />}
         </>
       )}
 
