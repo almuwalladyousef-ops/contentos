@@ -42,30 +42,39 @@ export async function GET() {
       }) => {
         const insightMetrics: Record<string, number> = {}
 
-        // Standard metrics — always available
-        try {
-          const r = await fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&period=lifetime&access_token=${ig_access_token}`)
-          const d = await r.json()
-          if (!d.error) {
-            for (const m of d.data ?? []) {
-              const val = m.values?.[0]?.value ?? m.value
-              if (val !== undefined) insightMetrics[m.name] = val
-            }
-          }
-        } catch { /* non-fatal */ }
+        // Run all three fetches in parallel: standard metrics, watch-time metrics,
+        // and a per-item duration fetch (fallback for when the list endpoint omits video_duration).
+        const [standardRes, watchRes, durationRes] = await Promise.allSettled([
+          fetch(`${base}/${item.id}/insights?metric=reach,plays,saved,shares&period=lifetime&access_token=${ig_access_token}`),
+          // Attempted for all video types — Instagram inconsistently returns media_type='VIDEO' for some Reels.
+          fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`),
+          // video_duration is not reliably returned in the list response, so fetch it directly.
+          item.video_duration == null
+            ? fetch(`${base}/${item.id}?fields=video_duration&access_token=${ig_access_token}`)
+            : Promise.resolve(null),
+        ])
 
-        // Watch-time metrics — attempted for all video types since Instagram inconsistently
-        // returns media_type='VIDEO' for some Reels. Fails silently for true non-Reels.
-        try {
-          const r = await fetch(`${base}/${item.id}/insights?metric=ig_reels_avg_watch_time,ig_reels_video_view_total_time&period=lifetime&access_token=${ig_access_token}`)
-          const d = await r.json()
-          if (!d.error) {
-            for (const m of d.data ?? []) {
-              const val = m.values?.[0]?.value ?? m.value
-              if (val !== undefined) insightMetrics[m.name] = val
-            }
+        for (const settled of [standardRes, watchRes]) {
+          if (settled.status === 'fulfilled') {
+            try {
+              const d = await settled.value.json()
+              if (!d.error) {
+                for (const m of d.data ?? []) {
+                  const val = m.values?.[0]?.value ?? m.value
+                  if (val !== undefined) insightMetrics[m.name] = val
+                }
+              }
+            } catch { /* non-fatal */ }
           }
-        } catch { /* non-fatal */ }
+        }
+
+        let videoDurationSec = item.video_duration ?? undefined
+        if (videoDurationSec == null && durationRes.status === 'fulfilled' && durationRes.value) {
+          try {
+            const d = await durationRes.value.json()
+            if (d.video_duration) videoDurationSec = d.video_duration
+          } catch { /* non-fatal */ }
+        }
 
         return {
           id: item.id,
@@ -86,7 +95,7 @@ export async function GET() {
                 : undefined),
             likes: item.like_count,
             comments: item.comments_count,
-            videoDurationSec: item.video_duration,
+            videoDurationSec,
           },
         }
       })
