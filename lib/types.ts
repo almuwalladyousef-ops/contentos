@@ -48,6 +48,28 @@ export interface Credentials {
   gemini_api_key?: string
 }
 
+export interface PlatformMetricsData {
+  platform: 'instagram' | 'youtube'
+  plays?: number
+  views?: number
+  likes?: number
+  comments?: number
+  saves?: number
+  shares?: number
+  reach?: number
+  avgWatchTimeMs?: number
+}
+
+export interface PlatformPost {
+  id: string
+  title?: string
+  caption?: string
+  timestamp: string
+  permalink?: string
+  thumbnail?: string
+  metrics: PlatformMetricsData
+}
+
 export type PostStatus = 'idle' | 'uploading' | 'success' | 'failed' | 'skipped'
 
 export interface PlatformStatus {
