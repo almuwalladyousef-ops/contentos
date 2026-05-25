@@ -8,17 +8,17 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto w-full bg-surface rounded-2xl border border-border shadow-lg p-8 sm:p-10 text-text">
-      <h1 className="text-3xl font-bold mb-2">ContentOS — Privacy Policy</h1>
+      <h1 className="text-3xl font-bold mb-2">ContentOS Personal — Privacy Policy</h1>
       <p className="text-text-muted text-sm mb-8">Last updated: May 24, 2026</p>
 
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
           <h2 className="text-xl font-semibold mb-2">Overview</h2>
           <p>
-            This Privacy Policy applies to <strong>ContentOS</strong>, a video content publishing application
-            (&ldquo;the App&rdquo;, &ldquo;the Service&rdquo;, &ldquo;we&rdquo;). ContentOS lets a creator upload one
+            This Privacy Policy applies to <strong>ContentOS Personal</strong>, a video content publishing application
+            (&ldquo;the App&rdquo;, &ldquo;the Service&rdquo;, &ldquo;we&rdquo;). ContentOS Personal lets a creator upload one
             video and post it to multiple platforms (YouTube, Instagram, TikTok). This policy explains what
-            data ContentOS handles, why, and how long we keep it.
+            data ContentOS Personal handles, why, and how long we keep it.
           </p>
         </section>
 
