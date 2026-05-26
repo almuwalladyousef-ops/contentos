@@ -167,34 +167,6 @@ export default function Sidebar({ navOpen, onToggle, pathname, account, onSwitch
           </Link>
         </div>
 
-        {/* ⌘K tip */}
-        <div style={{
-          padding: 10,
-          borderRadius: 10,
-          background: 'var(--bg-2)',
-          border: '1px solid var(--hairline)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 11,
-          color: 'var(--text-dim)',
-        }}>
-          <IconCommand size={14} />
-          <span>Press</span>
-          <kbd
-            className="mono"
-            style={{
-              padding: '1px 6px',
-              borderRadius: 4,
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              fontSize: 10,
-              color: 'var(--text-2)',
-            }}
-          >
-            ⌘K
-          </kbd>
-        </div>
 
         {/* Account switcher */}
         <div style={{
