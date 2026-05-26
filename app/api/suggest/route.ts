@@ -35,6 +35,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ hashtags })
     }
 
+    if (type === 'youtube_title') {
+      const prompt = `Generate 3 YouTube video titles optimized for Shorts. Each title must be under 60 characters, punchy, and click-worthy. Return ONLY a JSON array of 3 strings, no markdown, no explanation.${context ? `\n\nContext/topic: ${context}` : ''}`
+      const result = await model.generateContent(prompt)
+      const text = result.response.text().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+      const titles = JSON.parse(text)
+      return NextResponse.json({ titles })
+    }
+
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
   } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

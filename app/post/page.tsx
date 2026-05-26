@@ -248,9 +248,7 @@ export default function PostPage() {
   const [videoType, setVideoType] = useState<VideoType>('short')
   const [caption, setCaption] = useState('')
   const [ytCaption, setYtCaption] = useState('')
-  const [ytSeparate, setYtSeparate] = useState(false)
-  const [hashtags, setHashtags] = useState<string[]>(['#shorts', '#contentstrategy', '#creator'])
-  const [newTag, setNewTag] = useState('')
+  const [hashtags, setHashtags] = useState<string[]>([])
   const [enabled, setEnabled] = useState({ youtube: true, instagram: true, tiktok: true })
   const [privacy, setPrivacy] = useState('public')
   const [ttPrivacy, setTtPrivacy] = useState('PUBLIC_TO_EVERYONE')
@@ -259,13 +257,14 @@ export default function PostPage() {
   const [dragging, setDragging] = useState(false)
   const [suggestingCaptions, setSuggestingCaptions] = useState(false)
   const [suggestingHashtags, setSuggestingHashtags] = useState(false)
+  const [suggestingYtTitle, setSuggestingYtTitle] = useState(false)
   const [suggestedCaptions, setSuggestedCaptions] = useState<string[]>([])
   const [suggestedHashtags, setSuggestedHashtags] = useState<string[]>([])
+  const [suggestedYtTitles, setSuggestedYtTitles] = useState<string[]>([])
 
   useEffect(() => {
     if (videoType === 'long') {
       setEnabled({ youtube: true, instagram: false, tiktok: false })
-      setYtSeparate(true)
     } else {
       setEnabled({ youtube: true, instagram: true, tiktok: true })
     }
@@ -296,10 +295,9 @@ export default function PostPage() {
   async function postYouTube(blobUrl: string): Promise<{ url: string | null; result: PlatResult }> {
     if (!file) return { url: null, result: { success: false, error: 'No file' } }
     setStatus('youtube', 'uploading', 'posting to YouTube...')
-    const effectiveCaption = ytSeparate ? ytCaption : caption
     const res = await fetch('/api/post/youtube', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blobUrl, title: file.name.replace(/\.[^.]+$/, ''), description: effectiveCaption, privacy, size: file.size, type: file.type || 'video/mp4' }),
+      body: JSON.stringify({ blobUrl, title: ytCaption || file.name.replace(/\.[^.]+$/, ''), description: ytCaption, privacy, size: file.size, type: file.type || 'video/mp4' }),
     })
     const data = await safeJson(res)
     if (data.error) { setStatus('youtube', 'failed', data.error); return { url: null, result: { success: false, error: data.error } } }
@@ -355,6 +353,16 @@ export default function PostPage() {
     setSuggestingHashtags(false)
   }
 
+  async function suggestYtTitle() {
+    setSuggestingYtTitle(true)
+    try {
+      const res = await fetch('/api/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'youtube_title', context: caption || undefined }) })
+      const data = await res.json()
+      if (data.titles) setSuggestedYtTitles(data.titles)
+    } catch {}
+    setSuggestingYtTitle(false)
+  }
+
   async function handlePostAll() {
     if (!file) return
     setRunning(true)
@@ -406,7 +414,6 @@ export default function PostPage() {
   }
 
   const captionWithTags = useMemo(() => caption + (hashtags.length ? '\n\n' + hashtags.join(' ') : ''), [caption, hashtags])
-  const ytCaptionFull = useMemo(() => (ytSeparate ? ytCaption : caption) + (hashtags.length ? '\n\n' + hashtags.join(' ') : ''), [ytSeparate, ytCaption, caption, hashtags])
 
   const enabledCount = Object.values(enabled).filter(Boolean).length
   const successCount = Object.values(statuses).filter(s => s.state === 'success').length
@@ -417,7 +424,6 @@ export default function PostPage() {
     if (!t) return
     if (!t.startsWith('#')) t = `#${t}`
     setHashtags(prev => prev.includes(t) ? prev : [...prev, t])
-    setNewTag('')
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -524,44 +530,25 @@ export default function PostPage() {
           </div>
           <textarea className="textarea" rows={videoType === 'long' ? 3 : 5} placeholder="Write once, post everywhere…" value={caption} onChange={e => setCaption(e.target.value)} style={{ fontSize: 14 }} />
 
-          {/* YT separate toggle */}
-          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-2)', border: '1px solid var(--hairline)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <Toggle checked={ytSeparate || videoType === 'long'} onChange={setYtSeparate} disabled={videoType === 'long'} />
-              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <LogoYouTube size={12} /> Use a separate YouTube {videoType === 'long' ? 'description' : 'caption'}
-              </span>
-              {videoType === 'long' && <span className="pill" style={{ height: 20, fontSize: 10 }}>required</span>}
-            </label>
-            {(ytSeparate || videoType === 'long') && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--hairline)' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className="micro" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><LogoYouTube size={12} /> YouTube {videoType === 'long' ? 'description' : 'caption'}</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: ytCaption.length > 5000 ? 'var(--bad)' : 'var(--text-mute)' }}>{ytCaption.length} / 5000</span>
-                </div>
-                <textarea className="textarea" rows={videoType === 'long' ? 7 : 4} placeholder={videoType === 'long' ? 'Long-form description with chapters…' : 'Optional longer YouTube caption…'} value={ytCaption} onChange={e => setYtCaption(e.target.value)} style={{ fontSize: 14 }} />
-              </div>
-            )}
+          {/* YouTube Title */}
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--hairline)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span className="micro" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><LogoYouTube size={12} /> YouTube Title</span>
+              <span className="mono" style={{ fontSize: 10.5, color: ytCaption.length > 60 ? 'var(--bad)' : 'var(--text-mute)' }}>{ytCaption.length} / 60</span>
+            </div>
+            <textarea className="textarea" rows={2} maxLength={60} placeholder="YouTube video title…" value={ytCaption} onChange={e => setYtCaption(e.target.value)} style={{ fontSize: 14 }} />
           </div>
 
-          {/* Hashtags */}
-          <div style={{ marginTop: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span className="micro">Hashtags</span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>{hashtags.length} tags · appended to caption</span>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {/* Active hashtags (from suggestions) */}
+          {hashtags.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {hashtags.map(tag => (
                 <button key={tag} onClick={() => setHashtags(prev => prev.filter(t => t !== tag))} className="mono" style={{ fontSize: 11, padding: '4px 8px 4px 10px', borderRadius: 6, background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid oklch(0.80 0.16 80 / 0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} title="Click to remove">
                   {tag} <IconX size={10} style={{ opacity: 0.6 }} />
                 </button>
               ))}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', height: 26, borderRadius: 6, background: 'var(--bg-2)', border: '1px dashed var(--hairline)' }}>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>#</span>
-                <input value={newTag.replace(/^#/, '')} onChange={e => setNewTag(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { addTag(newTag) } }} onBlur={() => addTag(newTag)} placeholder="add" className="mono" style={{ background: 'transparent', border: 0, outline: 0, color: 'var(--text)', fontSize: 11, width: 60 }} />
-              </div>
             </div>
-          </div>
+          )}
 
           {/* Gemini AI suggestions */}
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -575,6 +562,10 @@ export default function PostPage() {
             <button className="btn ghost tiny" onClick={suggestHashtags} disabled={suggestingHashtags} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <IconSparkles size={11} />
               {suggestingHashtags ? 'generating…' : 'suggest hashtags'}
+            </button>
+            <button className="btn ghost tiny" onClick={suggestYtTitle} disabled={suggestingYtTitle} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <LogoYouTube size={11} />
+              {suggestingYtTitle ? 'generating…' : 'suggest youtube title'}
             </button>
           </div>
 
@@ -609,6 +600,26 @@ export default function PostPage() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Suggested YouTube titles */}
+          {suggestedYtTitles.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span className="micro">Suggested YouTube titles — click to use</span>
+                <button className="btn ghost tiny" onClick={() => setSuggestedYtTitles([])}>dismiss</button>
+              </div>
+              {suggestedYtTitles.map((t, i) => (
+                <button key={i} onClick={() => { setYtCaption(t.slice(0, 60)); setSuggestedYtTitles([]) }} style={{
+                  padding: '9px 12px', borderRadius: 8, textAlign: 'left',
+                  background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+                  fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5,
+                  transition: 'background 120ms ease',
+                }}>
+                  {t}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -689,7 +700,7 @@ export default function PostPage() {
         </div>
         {videoType === 'long' ? (
           <>
-            <PreviewYouTube caption={ytCaptionFull} enabled={enabled.youtube} />
+            <PreviewYouTube caption={ytCaption} enabled={enabled.youtube} />
             <div className="card" style={{ padding: 14, opacity: 0.5 }}>
               <div className="micro" style={{ marginBottom: 6 }}>Instagram / TikTok</div>
               <div style={{ fontSize: 12.5, color: 'var(--text-mute)', lineHeight: 1.5 }}>Long-form videos can&apos;t post here directly. Trim a 60s teaser to cross-post.</div>
@@ -699,7 +710,7 @@ export default function PostPage() {
           <>
             <PreviewTikTok    caption={captionWithTags} enabled={enabled.tiktok} />
             <PreviewInstagram caption={captionWithTags} enabled={enabled.instagram} />
-            <PreviewYouTube   caption={ytCaptionFull}   enabled={enabled.youtube} />
+            <PreviewYouTube   caption={ytCaption}   enabled={enabled.youtube} />
           </>
         )}
       </div>
