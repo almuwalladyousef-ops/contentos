@@ -12,6 +12,41 @@ interface AccountStatus {
   business: { email: string } | null
 }
 
+function IgRefreshButton() {
+  const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
+
+  async function handleRefresh() {
+    setState('loading')
+    setMsg('')
+    try {
+      const res = await fetch('/api/platforms/instagram/refresh-token', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) { setState('error'); setMsg(data.error) }
+      else { setState('ok'); setMsg(`Token refreshed — expires in ~${data.expires_in_days} days`) }
+    } catch (e: unknown) {
+      setState('error'); setMsg(String(e))
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        className="btn ghost tiny"
+        onClick={handleRefresh}
+        disabled={state === 'loading'}
+        style={{ alignSelf: 'flex-start' }}
+      >
+        {state === 'loading' ? 'Refreshing…' : state === 'ok' ? '✓ Refreshed' : '↻ Refresh token (60 days)'}
+      </button>
+      {msg && (
+        <span className="mono" style={{ fontSize: 11, color: state === 'error' ? 'var(--bad)' : 'var(--ok)' }}>
+          {msg}
+        </span>
+      )}
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   return (
@@ -355,6 +390,7 @@ function SettingsContent() {
             onChange={v => setCred('ig_account_id', v)}
             placeholder="e.g. 17841465850620700"
           />
+          {creds.ig_access_token && <IgRefreshButton />}
         </div>
       </IntegrationCard>
 
