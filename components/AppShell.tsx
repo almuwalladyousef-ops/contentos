@@ -32,7 +32,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ slot }),
     }).catch(() => {})
     setAccount(a => (a ? { ...a, active: slot } : a))
-  }, [])
+    router.refresh()
+  }, [router])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

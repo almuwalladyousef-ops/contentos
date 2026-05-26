@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
 
   const response = NextResponse.redirect(new URL('/settings', req.url))
   response.cookies.set(`cms_${slot}`, encrypted, COOKIE_OPTS)
-  response.cookies.set('cms_active', slot, COOKIE_OPTS)
+  // Only set active slot if none is set yet — prevents connecting a business account
+  // from silently switching away from personal on the next page load.
+  if (!req.cookies.get('cms_active')) {
+    response.cookies.set('cms_active', 'personal', COOKIE_OPTS)
+  }
   return response
 }
