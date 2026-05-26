@@ -383,7 +383,7 @@ function PostCard({ post, platform, selected, onClick }: {
         color: selected ? 'oklch(0.18 0.013 255)' : 'var(--text-mute)',
         flexShrink: 0, transition: 'all 140ms ease',
       }}>
-        {selected ? <IconCheck size={12} stroke={2.5} /> : null}
+        {selected ? <IconCheck size={12} /> : null}
       </div>
     </button>
   )
@@ -443,24 +443,25 @@ function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsDa
   const rawPlays = (isYT || isTT) ? metrics.views : metrics.plays
   const plays = rawPlays ?? 0
   const reach = metrics.reach ?? 0
-  const followers = metrics.followers ?? 0
   const likes = metrics.likes ?? 0
   const comments = metrics.comments ?? 0
-  const shares = metrics.shares ?? 0
-  const saves = metrics.saves ?? 0
+  const rawShares = metrics.shares
+  const rawSaves = metrics.saves
+  const shares = rawShares ?? 0
+  const saves = rawSaves ?? 0
+  // ER only computed when we have a reliable denominator from insights (plays or reach)
+  const erDenominator = plays > 0 ? plays : reach > 0 ? reach : 0
   const erTotal = likes + comments + shares + saves
-  // Fallback chain: plays → reach → followers (all standard ER denominators)
-  const erDenominator = plays > 0 ? plays : reach > 0 ? reach : followers
-  const engagementRate = erDenominator ? (erTotal / erDenominator) * 100 : 0
-  const erLabel = plays > 0 ? 'ER total' : reach > 0 ? 'ER by reach' : followers > 0 ? 'ER by followers' : 'ER total'
+  const engagementRate = erDenominator > 0 ? (erTotal / erDenominator) * 100 : null
+  const erLabel = plays > 0 ? 'ER total' : 'ER by reach'
 
   const tiles = [
     { k: (isYT || isTT) ? 'views' : 'plays', v: rawPlays !== undefined ? formatCount(rawPlays) : '—', sub: 'lifetime' },
-    { k: 'likes', v: formatCount(likes), sub: ratioOf(likes, erDenominator) + '%' },
-    { k: 'comments', v: formatCount(comments), sub: ratioOf(comments, erDenominator) + '%' },
-    { k: 'shares', v: formatCount(shares), sub: ratioOf(shares, erDenominator) + '%' },
-    ...(saves ? [{ k: 'saves', v: formatCount(saves), sub: ratioOf(saves, erDenominator) + '%' }] : []),
-    { k: 'engagement', v: engagementRate.toFixed(2) + '%', sub: erLabel },
+    { k: 'likes', v: formatCount(likes), sub: erDenominator > 0 ? ratioOf(likes, erDenominator) + '%' : '—' },
+    { k: 'comments', v: formatCount(comments), sub: erDenominator > 0 ? ratioOf(comments, erDenominator) + '%' : '—' },
+    { k: 'shares', v: rawShares !== undefined ? formatCount(shares) : '—', sub: erDenominator > 0 ? ratioOf(shares, erDenominator) + '%' : '—' },
+    ...(rawSaves ? [{ k: 'saves', v: formatCount(saves), sub: erDenominator > 0 ? ratioOf(saves, erDenominator) + '%' : '—' }] : []),
+    { k: 'engagement', v: engagementRate !== null ? engagementRate.toFixed(2) + '%' : '—', sub: engagementRate !== null ? erLabel : 'no insight data' },
   ]
 
   const apiLabel = isYT ? 'YouTube Data API v3' : isTT ? 'TikTok Content Posting API' : 'Instagram Graph API'
