@@ -284,7 +284,7 @@ function Logo() {
         <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'oklch(0.18 0.013 255)' }}>C</span>
       </div>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1 }}>ContentOS</div>
+        <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1 }}>ContentOS Flames</div>
         <div
           className="mono"
           style={{ fontSize: 9.5, color: 'var(--text-mute)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}

@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'ContentOS',
+  title: 'ContentOS Flames',
   description: 'Post and analyze your videos',
   other: {
     'tiktok-developers-site-verification': 'YGkyP6kFDJsdHfcKAN8wKtb0NyWuQvQO',

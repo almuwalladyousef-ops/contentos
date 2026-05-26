@@ -1,20 +1,20 @@
 export const metadata = {
-  title: 'Terms of Service — ContentOS',
+  title: 'Terms of Service — ContentOS Flames',
 }
 
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto w-full bg-surface rounded-2xl border border-border shadow-lg p-8 sm:p-10 text-text">
-      <h1 className="text-3xl font-bold mb-2">ContentOS Personal — Terms of Service</h1>
+      <h1 className="text-3xl font-bold mb-2">ContentOS Flames — Terms of Service</h1>
       <p className="text-text-muted text-sm mb-8">Last updated: May 24, 2026</p>
 
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
           <h2 className="text-xl font-semibold mb-2">1. The Application</h2>
           <p>
-            These Terms of Service govern your use of <strong>ContentOS Personal</strong>, a video content publishing
-            application (&ldquo;the App&rdquo;, &ldquo;the Service&rdquo;). ContentOS Personal lets you upload one video and post
-            it to multiple connected platforms (YouTube, Instagram, TikTok). By using ContentOS Personal you agree to
+            These Terms of Service govern your use of <strong>ContentOS Flames</strong>, a video content publishing
+            application (&ldquo;the App&rdquo;, &ldquo;the Service&rdquo;). ContentOS Flames lets you upload one video and post
+            it to multiple connected platforms (YouTube, Instagram, TikTok). By using ContentOS Flames you agree to
             these Terms.
           </p>
         </section>
