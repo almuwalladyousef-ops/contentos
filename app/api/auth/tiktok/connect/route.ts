@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
 
   const params = new URLSearchParams({
     client_key: process.env.TIKTOK_CLIENT_KEY!,
-    scope: 'video.publish,video.upload,user.info.basic',
+    scope: 'video.publish,video.upload,video.list,user.info.basic',
     response_type: 'code',
     redirect_uri: redirectUri,
     state: slot,

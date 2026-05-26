@@ -49,7 +49,7 @@ export interface Credentials {
 }
 
 export interface PlatformMetricsData {
-  platform: 'instagram' | 'youtube'
+  platform: 'instagram' | 'youtube' | 'tiktok'
   mediaType?: string
   plays?: number
   views?: number

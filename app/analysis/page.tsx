@@ -324,13 +324,13 @@ function SegTabs({ value, onChange, options }: {
 // ── Post card ─────────────────────────────────────────────────────────────────
 function PostCard({ post, platform, selected, onClick }: {
   post: PlatformPost
-  platform: 'instagram' | 'youtube'
+  platform: Platform
   selected: boolean
   onClick: () => void
 }) {
   const caption = platform === 'youtube' ? post.title : post.caption
   const date = new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  const plays = platform === 'youtube' ? (post.metrics.views ?? 0) : (post.metrics.plays ?? 0)
+  const plays = platform === 'youtube' ? (post.metrics.views ?? 0) : platform === 'tiktok' ? (post.metrics.views ?? 0) : (post.metrics.plays ?? 0)
   const likes = post.metrics.likes ?? 0
   const comments = post.metrics.comments ?? 0
   const hue = post.id.charCodeAt(0) * 5 % 360
@@ -413,7 +413,7 @@ function SourceSummary({ post, platform, stage }: {
           {(platform === 'youtube' ? post.title : post.caption) || 'No caption'}
         </div>
         <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
-          {platform === 'youtube' ? 'YouTube' : 'Instagram'} · {date} · id <span style={{ color: 'var(--text-2)' }}>{post.id.slice(0, 16)}</span>
+          {platform === 'youtube' ? 'YouTube' : platform === 'tiktok' ? 'TikTok' : 'Instagram'} · {date} · id <span style={{ color: 'var(--text-2)' }}>{post.id.slice(0, 16)}</span>
         </div>
       </div>
       <span className="pill" style={{
@@ -439,7 +439,8 @@ function SourceSummary({ post, platform, stage }: {
 // ── Platform metrics card ─────────────────────────────────────────────────────
 function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsData; platform: string }) {
   const isYT = platform === 'youtube'
-  const plays = isYT ? (metrics.views ?? 0) : (metrics.plays ?? 0)
+  const isTT = platform === 'tiktok'
+  const plays = (isYT || isTT) ? (metrics.views ?? 0) : (metrics.plays ?? 0)
   const likes = metrics.likes ?? 0
   const comments = metrics.comments ?? 0
   const shares = metrics.shares ?? 0
@@ -448,7 +449,7 @@ function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsDa
   const engagementRate = plays ? (erTotal / plays) * 100 : 0
 
   const tiles = [
-    { k: isYT ? 'views' : 'plays', v: formatCount(plays), sub: 'lifetime' },
+    { k: (isYT || isTT) ? 'views' : 'plays', v: formatCount(plays), sub: 'lifetime' },
     { k: 'likes', v: formatCount(likes), sub: ratioOf(likes, plays) + '%' },
     { k: 'comments', v: formatCount(comments), sub: ratioOf(comments, plays) + '%' },
     { k: 'shares', v: formatCount(shares), sub: ratioOf(shares, plays) + '%' },
@@ -456,12 +457,14 @@ function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsDa
     { k: 'engagement', v: engagementRate.toFixed(2) + '%', sub: 'ER total' },
   ]
 
+  const apiLabel = isYT ? 'YouTube Data API v3' : isTT ? 'TikTok Content Posting API' : 'Instagram Graph API'
+
   return (
     <div className="card" style={{ padding: 'var(--pad)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div className="micro" style={{ marginBottom: 4 }}>
-            live · pulled from {isYT ? 'YouTube Data API v3' : 'Instagram Graph API'}
+            live · pulled from {apiLabel}
           </div>
           <h2 className="h2">Platform metrics</h2>
         </div>
@@ -860,7 +863,7 @@ function UploadPane({ file, fileRef, onBrowse, onRun, running, stage, isLarge }:
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 type Mode = 'upload' | 'platform'
-type Platform = 'instagram' | 'youtube'
+type Platform = 'instagram' | 'youtube' | 'tiktok'
 
 export default function AnalysisPage() {
   const [mode, setMode] = useState<Mode>('platform')
@@ -870,7 +873,6 @@ export default function AnalysisPage() {
   const [running, setRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState('')
-  const [retentionError, setRetentionError] = useState('')
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -889,7 +891,7 @@ export default function AnalysisPage() {
     setLoadingPosts(true)
     setPostsError('')
     try {
-      const url = p === 'instagram' ? '/api/platforms/instagram' : '/api/platforms/youtube/videos'
+      const url = p === 'instagram' ? '/api/platforms/instagram' : p === 'tiktok' ? '/api/platforms/tiktok/videos' : '/api/platforms/youtube/videos'
       const res = await fetch(url)
       const data = await res.json()
       if (data.error) { setPostsError(data.error); return }
@@ -937,29 +939,19 @@ export default function AnalysisPage() {
 
   async function handlePlatformRun() {
     if (!selectedPost) return
-    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(selectedPost.metrics); setSaved(false); setRetentionError('')
+    setRunning(true); setError(''); setTranscript(''); setAnalysis(null); setMetrics(selectedPost.metrics); setSaved(false)
     try {
       let text = ''
       if (platform === 'youtube') {
-        // Fetch captions + retention in parallel
-        setStatus('fetching YouTube captions & analytics...')
-        const [tRes, retRes] = await Promise.all([
-          fetch(`/api/platforms/youtube/transcript?videoId=${selectedPost.id}`),
-          fetch(`/api/platforms/youtube/retention?videoId=${selectedPost.id}`),
-        ])
-        const [tData, retData] = await Promise.all([tRes.json(), retRes.json()])
+        setStatus('fetching YouTube captions...')
+        const tRes = await fetch(`/api/platforms/youtube/transcript?videoId=${selectedPost.id}`)
+        const tData = await tRes.json()
         if (tData.error) throw new Error(tData.error)
         text = tData.transcript
         setTranscript(text)
-        // Merge real retention curve into metrics (don't throw if analytics fails)
-        if (!retData.error && retData.curve) {
-          setMetrics(prev => prev ? { ...prev, retentionCurve: retData.curve, avgRetentionPct: retData.avgPct } : prev)
-        } else if (retData.error) {
-          setRetentionError(retData.error)
-        }
       } else {
         text = selectedPost.caption ?? ''
-        if (!text) throw new Error('This post has no caption text to analyze.')
+        if (!text) throw new Error(`This ${platform === 'tiktok' ? 'video has no description' : 'post has no caption'} text to analyze.`)
         setTranscript(text)
       }
       setStatus('analyzing with Gemini...')
@@ -994,6 +986,7 @@ export default function AnalysisPage() {
   const ANALYSIS_PLATFORMS = [
     { id: 'instagram' as Platform, name: 'Instagram', sub: 'caption-based' },
     { id: 'youtube' as Platform, name: 'YouTube', sub: 'caption track' },
+    { id: 'tiktok' as Platform, name: 'TikTok', sub: 'description-based' },
   ]
 
   return (
@@ -1103,7 +1096,9 @@ export default function AnalysisPage() {
               <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
                 {platform === 'instagram'
                   ? 'Caption text + post metrics pulled live from Instagram Graph API.'
-                  : 'Caption track + analytics pulled live from YouTube Data API v3.'}
+                  : platform === 'tiktok'
+                  ? 'Video description + metrics pulled live from TikTok Content Posting API.'
+                  : 'Caption track pulled live from YouTube Data API v3.'}
               </div>
               <button
                 className="btn primary"
@@ -1174,7 +1169,6 @@ export default function AnalysisPage() {
             <FormatCard analysis={analysis} />
             <VerdictCard analysis={analysis} />
           </div>
-          <RetentionCard analysis={analysis} metrics={metrics} retentionError={retentionError} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
             <ViralityCard factors={analysis.virality_factors} />
             <NarrativeCard structure={analysis.narrative_structure} />
@@ -1194,6 +1188,8 @@ export default function AnalysisPage() {
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)' }}>
               {platform === 'youtube'
                 ? 'Will fetch YouTube captions, then run Gemini analysis on the transcript.'
+                : platform === 'tiktok'
+                ? 'Will analyze the video description with Gemini using live TikTok metrics for context.'
                 : 'Will analyze the caption text with Gemini using live IG metrics for context.'}
             </div>
           </div>
