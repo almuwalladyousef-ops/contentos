@@ -48,7 +48,8 @@ export async function GET() {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
-  const creds = await getCredentials(account.accessToken, status.active)
+  // Always use personal slot IG credentials — Instagram is configured once and shared across slots
+  const creds = await getCredentials(account.accessToken, 'personal')
   if (!creds?.ig_access_token || !creds?.ig_account_id) {
     return NextResponse.json({ error: 'Instagram not connected. Add credentials in Settings.' }, { status: 400 })
   }
