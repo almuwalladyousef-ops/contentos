@@ -56,10 +56,12 @@ export async function GET() {
   const { ig_access_token, ig_account_id } = creds
 
   try {
-    const mediaRes = await fetch(
-      `${GRAPH_BASE}/${ig_account_id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`
-    )
-    const mediaData = await mediaRes.json()
+    const [mediaRes, accountRes] = await Promise.all([
+      fetch(`${GRAPH_BASE}/${ig_account_id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`),
+      fetch(`${GRAPH_BASE}/${ig_account_id}?fields=followers_count&access_token=${ig_access_token}`),
+    ])
+    const [mediaData, accountData] = await Promise.all([mediaRes.json(), accountRes.json()])
+    const followersCount: number | undefined = toFiniteNumber(accountData.followers_count)
 
     if (mediaData.error) {
       return NextResponse.json({ error: mediaData.error.message }, { status: 400 })
@@ -132,6 +134,7 @@ export async function GET() {
             likes: item.like_count,
             comments: item.comments_count,
             videoDurationSec,
+            followers: followersCount,
           },
         }
       })

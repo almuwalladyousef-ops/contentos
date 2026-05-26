@@ -62,6 +62,7 @@ export interface PlatformMetricsData {
   videoDurationSec?: number
   retentionCurve?: number[]
   avgRetentionPct?: number
+  followers?: number
 }
 
 export interface PlatformPost {

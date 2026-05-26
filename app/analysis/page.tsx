@@ -443,15 +443,16 @@ function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsDa
   const rawPlays = (isYT || isTT) ? metrics.views : metrics.plays
   const plays = rawPlays ?? 0
   const reach = metrics.reach ?? 0
+  const followers = metrics.followers ?? 0
   const likes = metrics.likes ?? 0
   const comments = metrics.comments ?? 0
   const shares = metrics.shares ?? 0
   const saves = metrics.saves ?? 0
   const erTotal = likes + comments + shares + saves
-  // Fall back to reach as ER denominator for Instagram/TikTok when plays are unavailable
-  const erDenominator = plays > 0 ? plays : reach
+  // Fallback chain: plays → reach → followers (all standard ER denominators)
+  const erDenominator = plays > 0 ? plays : reach > 0 ? reach : followers
   const engagementRate = erDenominator ? (erTotal / erDenominator) * 100 : 0
-  const erLabel = plays > 0 ? 'ER total' : reach > 0 ? 'ER by reach' : 'ER total'
+  const erLabel = plays > 0 ? 'ER total' : reach > 0 ? 'ER by reach' : followers > 0 ? 'ER by followers' : 'ER total'
 
   const tiles = [
     { k: (isYT || isTT) ? 'views' : 'plays', v: rawPlays !== undefined ? formatCount(rawPlays) : '—', sub: 'lifetime' },
