@@ -440,21 +440,26 @@ function SourceSummary({ post, platform, stage }: {
 function PlatformMetricsCard({ metrics, platform }: { metrics: PlatformMetricsData; platform: string }) {
   const isYT = platform === 'youtube'
   const isTT = platform === 'tiktok'
-  const plays = (isYT || isTT) ? (metrics.views ?? 0) : (metrics.plays ?? 0)
+  const rawPlays = (isYT || isTT) ? metrics.views : metrics.plays
+  const plays = rawPlays ?? 0
+  const reach = metrics.reach ?? 0
   const likes = metrics.likes ?? 0
   const comments = metrics.comments ?? 0
   const shares = metrics.shares ?? 0
   const saves = metrics.saves ?? 0
   const erTotal = likes + comments + shares + saves
-  const engagementRate = plays ? (erTotal / plays) * 100 : 0
+  // Fall back to reach as ER denominator for Instagram/TikTok when plays are unavailable
+  const erDenominator = plays > 0 ? plays : reach
+  const engagementRate = erDenominator ? (erTotal / erDenominator) * 100 : 0
+  const erLabel = plays > 0 ? 'ER total' : reach > 0 ? 'ER by reach' : 'ER total'
 
   const tiles = [
-    { k: (isYT || isTT) ? 'views' : 'plays', v: formatCount(plays), sub: 'lifetime' },
-    { k: 'likes', v: formatCount(likes), sub: ratioOf(likes, plays) + '%' },
-    { k: 'comments', v: formatCount(comments), sub: ratioOf(comments, plays) + '%' },
-    { k: 'shares', v: formatCount(shares), sub: ratioOf(shares, plays) + '%' },
-    ...(saves ? [{ k: 'saves', v: formatCount(saves), sub: ratioOf(saves, plays) + '%' }] : []),
-    { k: 'engagement', v: engagementRate.toFixed(2) + '%', sub: 'ER total' },
+    { k: (isYT || isTT) ? 'views' : 'plays', v: rawPlays !== undefined ? formatCount(rawPlays) : '—', sub: 'lifetime' },
+    { k: 'likes', v: formatCount(likes), sub: ratioOf(likes, erDenominator) + '%' },
+    { k: 'comments', v: formatCount(comments), sub: ratioOf(comments, erDenominator) + '%' },
+    { k: 'shares', v: formatCount(shares), sub: ratioOf(shares, erDenominator) + '%' },
+    ...(saves ? [{ k: 'saves', v: formatCount(saves), sub: ratioOf(saves, erDenominator) + '%' }] : []),
+    { k: 'engagement', v: engagementRate.toFixed(2) + '%', sub: erLabel },
   ]
 
   const apiLabel = isYT ? 'YouTube Data API v3' : isTT ? 'TikTok Content Posting API' : 'Instagram Graph API'

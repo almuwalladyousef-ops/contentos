@@ -92,6 +92,7 @@ export async function GET() {
             'views',
             'plays',
             'video_views',
+            'impressions',
             'ig_reels_avg_watch_time',
             'ig_reels_video_view_total_time',
           ], ig_access_token),
@@ -122,7 +123,8 @@ export async function GET() {
               ?? insightMetrics['video_views']
               ?? (insightMetrics['ig_reels_video_view_total_time'] !== undefined && insightMetrics['ig_reels_avg_watch_time']
                 ? Math.round(insightMetrics['ig_reels_video_view_total_time'] / insightMetrics['ig_reels_avg_watch_time'])
-                : undefined),
+                : undefined)
+              ?? insightMetrics['impressions'],
             reach: insightMetrics['reach'],
             saves: insightMetrics['saved'],
             shares: insightMetrics['shares'],
