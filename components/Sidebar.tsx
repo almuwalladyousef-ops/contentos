@@ -146,6 +146,27 @@ export default function Sidebar({ navOpen, onToggle, pathname, account, onSwitch
 
       {/* Bottom slot */}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Legal links */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: '0 6px' }}>
+          <Link
+            href="/privacy"
+            style={{ fontSize: 10.5, color: 'var(--text-mute)', textDecoration: 'none' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-dim)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-mute)' }}
+          >
+            Privacy Policy
+          </Link>
+          <span style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>·</span>
+          <Link
+            href="/terms"
+            style={{ fontSize: 10.5, color: 'var(--text-mute)', textDecoration: 'none' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-dim)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-mute)' }}
+          >
+            Terms of Service
+          </Link>
+        </div>
+
         {/* ⌘K tip */}
         <div style={{
           padding: 10,
