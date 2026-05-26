@@ -39,13 +39,26 @@ export const COOKIE_OPTS = {
   path: '/',
 }
 
+// Session-only cookie (no maxAge) — cleared when browser closes
+const SESSION_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+}
+
 export function encryptAccount(account: StoredAccount): string {
   return encrypt(JSON.stringify(account))
 }
 
 export async function getAccountsStatus() {
   const jar = await cookies()
-  const active = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  const stored = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  // Only respect a non-personal active slot if the user explicitly switched
+  // this browser session (cms_switched is a session cookie, cleared on browser close).
+  // This ensures fresh loads always land on personal, not a stale 'business' cookie.
+  const explicitlySwitched = !!jar.get('cms_switched')?.value
+  const active: AccountSlot = explicitlySwitched ? stored : 'personal'
 
   const getSlotInfo = (slot: AccountSlot) => {
     const val = jar.get(`cms_${slot}`)?.value
@@ -69,6 +82,9 @@ export async function saveAccount(slot: AccountSlot, account: StoredAccount): Pr
 export async function switchAccount(slot: AccountSlot): Promise<void> {
   const jar = await cookies()
   jar.set('cms_active', slot, COOKIE_OPTS)
+  // Mark that the user explicitly chose a slot this session so getAccountsStatus
+  // will respect it instead of defaulting back to personal.
+  jar.set('cms_switched', '1', SESSION_COOKIE_OPTS)
 }
 
 async function refreshAccessToken(account: StoredAccount): Promise<StoredAccount> {
@@ -112,7 +128,9 @@ async function getAccountBySlot(slot: AccountSlot): Promise<{ accessToken: strin
 
 export async function getActiveAccount(): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
   const jar = await cookies()
-  const active = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  const stored = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  const explicitlySwitched = !!jar.get('cms_switched')?.value
+  const active: AccountSlot = explicitlySwitched ? stored : 'personal'
   return getAccountBySlot(active)
 }
 

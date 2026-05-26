@@ -31,9 +31,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot }),
     }).catch(() => {})
-    setAccount(a => (a ? { ...a, active: slot } : a))
-    router.refresh()
-  }, [router])
+    // Full reload so all client useEffect data fetches re-run with the new account cookie
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
