@@ -231,6 +231,29 @@ function SettingsContent() {
     }
   }
 
+  const [igRefreshing, setIgRefreshing] = useState(false)
+  const [igRefreshMsg, setIgRefreshMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function handleIgRefresh() {
+    setIgRefreshing(true); setIgRefreshMsg(null)
+    try {
+      const res = await fetch('/api/platforms/instagram/refresh-token', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setIgRefreshMsg({ ok: true, text: `Token refreshed — expires in ~${data.expires_in_days} days` })
+      // Reload credentials so the new token shows in the field
+      const credsRes = await fetch('/api/drive/credentials?slot=all')
+      const credsData = await credsRes.json()
+      if (credsData && !credsData.error) {
+        setAllCreds({ personal: credsData.personal ?? {}, business: credsData.business ?? {} })
+      }
+    } catch (e: unknown) {
+      setIgRefreshMsg({ ok: false, text: String(e) })
+    } finally {
+      setIgRefreshing(false)
+    }
+  }
+
   const acc = accountStatus?.[slot]
   const ttConnectedSlot = !!ttTokens[slot]
   const connectedCount = [acc, ttConnectedSlot, creds.ig_access_token, creds.groq_api_key, creds.gemini_api_key].filter(Boolean).length
@@ -355,6 +378,22 @@ function SettingsContent() {
             onChange={v => setCred('ig_account_id', v)}
             placeholder="e.g. 17841465850620700"
           />
+          {creds.ig_access_token && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                className="btn tiny"
+                onClick={handleIgRefresh}
+                disabled={igRefreshing}
+              >
+                {igRefreshing ? 'Refreshing…' : 'Refresh token'}
+              </button>
+              {igRefreshMsg && (
+                <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
+                  {igRefreshMsg.text}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </IntegrationCard>
 
