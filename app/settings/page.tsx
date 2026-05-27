@@ -238,7 +238,7 @@ function SettingsContent() {
   return (
     <div className="anim-up" style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div className="micro" style={{ marginBottom: 4 }}>Workspace · {slot}</div>
           <h1 className="h1">Settings</h1>
@@ -403,6 +403,7 @@ function SettingsContent() {
       {/* Sticky save bar */}
       <div className="card" style={{
         padding: 16, display: 'flex', alignItems: 'center', gap: 14,
+        flexWrap: 'wrap',
         position: 'sticky', bottom: 16,
         backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       }}>

@@ -433,7 +433,7 @@ export default function PostPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 'var(--gap)' }}>
+    <div className="post-layout" style={{ maxWidth: 1280, margin: '0 auto', gap: 'var(--gap)' }}>
       {/* ── LEFT: Composer ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
         {/* Header */}
@@ -630,14 +630,14 @@ export default function PostPage() {
             <div className="micro">Destinations</div>
             {videoType === 'long' && <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>long-form · YouTube only</span>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div className="platform-grid-3" style={{ gap: 12 }}>
             <PlatformToggle platform="youtube"   enabled={enabled.youtube}   locked={false}                        onToggle={() => togglePlatform('youtube')}   status={statuses.youtube.state}   detail={`${videoType === 'long' ? 'Video' : 'Shorts'} · ${privacy}`} />
             <PlatformToggle platform="instagram" enabled={enabled.instagram} locked={videoType === 'long'}          onToggle={() => togglePlatform('instagram')} status={statuses.instagram.state} detail="public" />
             <PlatformToggle platform="tiktok"    enabled={enabled.tiktok}    locked={videoType === 'long'}          onToggle={() => togglePlatform('tiktok')}    status={statuses.tiktok.state}    detail={ttPrivacy === 'PUBLIC_TO_EVERYONE' ? 'public' : ttPrivacy === 'FOLLOWER_OF_CREATOR' ? 'followers' : 'only me'} />
           </div>
 
           {/* Privacy details */}
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          <div className="privacy-grid-3" style={{ marginTop: 16, gap: 14 }}>
             <div style={{ padding: 12, borderRadius: 10, background: 'var(--bg-2)', border: '1px solid var(--hairline)', opacity: enabled.youtube ? 1 : 0.4 }}>
               <div className="micro" style={{ marginBottom: 8 }}>YouTube</div>
               <PrivacyRadio value={privacy} onChange={setPrivacy} options={['public', 'unlisted', 'private']} />
@@ -670,7 +670,7 @@ export default function PostPage() {
         </div>
 
         {/* Sticky action bar */}
-        <div className="card" style={{ padding: 'var(--pad-sm)', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', bottom: 16, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+        <div className="card post-actions" style={{ padding: 'var(--pad-sm)', gap: 12, position: 'sticky', bottom: 16, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
           {running ? (
             <span className="pill warn"><span className="dot" /> posting · {successCount}/{enabledCount} done</span>
           ) : allPosted ? (
@@ -678,7 +678,7 @@ export default function PostPage() {
           ) : (
             <span className="pill"><span className="dot" /> {enabledCount} platform{enabledCount !== 1 ? 's' : ''} selected</span>
           )}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="post-actions-buttons" style={{ marginLeft: 'auto', alignItems: 'center', gap: 8 }}>
             <button className="btn ghost" disabled={running}>Save as draft</button>
             <button className="btn ghost" disabled={running}><IconClock size={14} /> Schedule</button>
             <button className="btn primary big" disabled={!file || running || enabledCount === 0} onClick={handlePostAll}>

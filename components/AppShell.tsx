@@ -14,9 +14,21 @@ interface AccountStatus {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
   const [account, setAccount] = useState<AccountStatus | null>(null)
   const router = useRouter()
   const pathname = usePathname()
+
+  useEffect(() => {
+    function checkMobile() {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) setNavOpen(false)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -51,15 +63,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="app"
-      style={{ gridTemplateColumns: navOpen ? '240px 1fr' : '0 1fr' }}
+      style={{ gridTemplateColumns: isMobile ? '1fr' : (navOpen ? '240px 1fr' : '0 1fr') }}
     >
       <Sidebar
         navOpen={navOpen}
+        isMobile={isMobile}
         onToggle={() => setNavOpen(v => !v)}
         pathname={pathname}
         account={account}
         onSwitchSlot={switchSlot}
       />
+
+      {/* Backdrop for mobile sidebar */}
+      {isMobile && navOpen && (
+        <div
+          onClick={() => setNavOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 40,
+            background: 'oklch(0 0 0 / 0.55)',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)',
+          }}
+        />
+      )}
 
       <button
         className={`nav-reopen${!navOpen ? ' visible' : ''}`}
@@ -75,8 +101,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         style={{
           padding: 'var(--pad)',
           position: 'relative',
-          height: '100vh',
-          overflowY: 'auto',
+          height: isMobile ? 'auto' : '100vh',
+          minHeight: isMobile ? '100vh' : undefined,
+          overflowY: isMobile ? 'visible' : 'auto',
         }}
       >
         {children}

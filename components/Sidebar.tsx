@@ -19,6 +19,7 @@ interface AccountStatus {
 
 interface SidebarProps {
   navOpen: boolean
+  isMobile: boolean
   onToggle: () => void
   pathname: string
   account: AccountStatus | null
@@ -32,7 +33,7 @@ const NAV_ITEMS = [
   { href: '/settings', label: 'Settings', Icon: IconSettings, shortcut: '⌘,' },
 ]
 
-export default function Sidebar({ navOpen, onToggle, pathname, account, onSwitchSlot }: SidebarProps) {
+export default function Sidebar({ navOpen, isMobile, onToggle, pathname, account, onSwitchSlot }: SidebarProps) {
   const slot = account?.active ?? 'personal'
   const acc = account ? account[slot] : null
   const initials = acc?.email
@@ -47,16 +48,29 @@ export default function Sidebar({ navOpen, onToggle, pathname, account, onSwitch
         gap: 10,
         padding: '20px 14px',
         borderRight: '1px solid var(--border)',
-        background: 'oklch(0.155 0.012 255 / 0.5)',
+        background: 'oklch(0.155 0.012 255 / 0.95)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        overflow: 'hidden',
-        opacity: navOpen ? 1 : 0,
-        transition: 'opacity 180ms ease',
-        pointerEvents: navOpen ? 'auto' : 'none',
+        ...(isMobile ? {
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          height: '100vh',
+          width: 260,
+          zIndex: 45,
+          overflowY: 'auto',
+          transform: navOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1)',
+          pointerEvents: navOpen ? 'auto' : 'none',
+        } : {
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          overflow: 'hidden',
+          opacity: navOpen ? 1 : 0,
+          transition: 'opacity 180ms ease',
+          pointerEvents: navOpen ? 'auto' : 'none',
+        }),
       }}
     >
       {/* Logo row */}
