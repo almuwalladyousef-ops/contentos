@@ -3,14 +3,15 @@ import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
 export async function POST() {
-  const appId = process.env.FACEBOOK_APP_ID
-  const appSecret = process.env.FACEBOOK_APP_SECRET
-  if (!appId || !appSecret) {
-    return NextResponse.json({ error: 'FACEBOOK_APP_ID and FACEBOOK_APP_SECRET must be set as environment variables.' }, { status: 500 })
-  }
-
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+
+  const slot = status.active.toUpperCase() // 'PERSONAL' or 'BUSINESS'
+  const appId = process.env[`FACEBOOK_APP_ID_${slot}`] ?? process.env.FACEBOOK_APP_ID
+  const appSecret = process.env[`FACEBOOK_APP_SECRET_${slot}`] ?? process.env.FACEBOOK_APP_SECRET
+  if (!appId || !appSecret) {
+    return NextResponse.json({ error: `FACEBOOK_APP_ID_${slot} and FACEBOOK_APP_SECRET_${slot} must be set as environment variables.` }, { status: 500 })
+  }
 
   const creds = await getCredentials(account.accessToken, status.active)
   if (!creds?.ig_access_token) {
