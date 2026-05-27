@@ -5,7 +5,7 @@ import { upload } from '@vercel/blob/client'
 import StatusDot from '@/components/StatusDot'
 import {
   IconUpload, IconFilm, IconX, IconArrowRight, IconClock,
-  IconCheck, IconSparkles, LogoYouTube, LogoInstagram, LogoTikTok, PlatformIcon,
+  IconCheck, IconSparkles, LogoYouTube, PlatformIcon,
 } from '@/components/Icons'
 import { PostStatus } from '@/lib/types'
 
@@ -92,110 +92,11 @@ function PrivacyRadio({ value, onChange, options }: {
   )
 }
 
-// ── Fake thumbnail for preview ────────────────────────────────────────────────
-function FakeThumb({ width = 94, ratio = '9/16' }: { width?: number; ratio?: string }) {
-  return (
-    <div style={{
-      width, aspectRatio: ratio, borderRadius: 8, flexShrink: 0,
-      background: 'linear-gradient(160deg, oklch(0.32 0.06 250), oklch(0.22 0.04 280))',
-      position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{ position: 'absolute', bottom: 4, left: 5, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'oklch(1 0 0 / 0.5)', letterSpacing: '0.1em' }}>0:00</div>
-    </div>
-  )
-}
-
-// ── Platform previews ─────────────────────────────────────────────────────────
-function PreviewCard({ platform, label, color, enabled, children }: {
-  platform: string; label: string; color: string; enabled: boolean; children: React.ReactNode
-}) {
-  return (
-    <div className="card" style={{ padding: 14, opacity: enabled ? 1 : 0.4, transition: 'opacity 180ms ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ color, display: 'inline-flex' }}><PlatformIcon platform={platform} size={14} /></span>
-        <span className="micro" style={{ color: 'var(--text-2)' }}>{label}</span>
-        {!enabled && <span className="pill" style={{ marginLeft: 'auto', height: 18, fontSize: 10 }}><span className="dot" /> off</span>}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function PreviewTikTok({ caption, enabled }: { caption: string; enabled: boolean }) {
-  const first = (caption || '').split('\n')[0] || '...'
-  return (
-    <PreviewCard platform="tiktok" label="TikTok · For You" color="oklch(0.85 0.15 200)" enabled={enabled}>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <FakeThumb />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 22, height: 22, borderRadius: 999, background: 'linear-gradient(135deg, oklch(0.85 0.15 200), oklch(0.70 0.20 340))', padding: 1.5 }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: 999, background: 'var(--surface)', display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 600 }}>YM</div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>yousefmakes</span>
-          </div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>{first}</div>
-          <div style={{ display: 'flex', gap: 10, color: 'var(--text-dim)', fontSize: 11 }}>
-            <span>♥ 18.4k</span><span>💬 247</span><span>↗ 1.2k</span>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>est. reach · 4.2K – 18K</div>
-        </div>
-      </div>
-    </PreviewCard>
-  )
-}
-
-function PreviewInstagram({ caption, enabled }: { caption: string; enabled: boolean }) {
-  const first = (caption || '').split('\n')[0] || '...'
-  return (
-    <PreviewCard platform="instagram" label="Instagram · Reels" color="oklch(0.70 0.20 340)" enabled={enabled}>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <FakeThumb />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 22, height: 22, borderRadius: 999, background: 'conic-gradient(from 130deg, oklch(0.70 0.20 340), oklch(0.75 0.18 60), oklch(0.70 0.20 340))', padding: 1.5 }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: 999, background: 'var(--surface)', display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 600 }}>YM</div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>yousefmakes</span>
-          </div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>
-            <span style={{ fontWeight: 500, color: 'var(--text)' }}>yousefmakes </span>{first}
-          </div>
-          <div style={{ display: 'flex', gap: 10, color: 'var(--text-dim)', fontSize: 11 }}>
-            <span>♡ 1.2k</span><span>💬 84</span><span>✈ 312</span>
-          </div>
-        </div>
-      </div>
-    </PreviewCard>
-  )
-}
-
-function PreviewYouTube({ caption, enabled }: { caption: string; enabled: boolean }) {
-  const title = (caption || '').split('\n')[0].slice(0, 95) || 'Untitled Short'
-  return (
-    <PreviewCard platform="youtube" label="YouTube · Shorts" color="oklch(0.68 0.21 25)" enabled={enabled}>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <FakeThumb />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 22, height: 22, borderRadius: 999, background: 'oklch(0.68 0.21 25)', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>Y</div>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Yousef Makes</span>
-          </div>
-          <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{title}</div>
-          <div style={{ display: 'flex', gap: 10, color: 'var(--text-dim)', fontSize: 11 }}>
-            <span>👍 2.1k</span><span>💬 184</span><span>↗ 412</span>
-          </div>
-        </div>
-      </div>
-    </PreviewCard>
-  )
-}
-
 // ── Platform toggle card ──────────────────────────────────────────────────────
 const PLATFORM_META = {
-  youtube:   { name: 'YouTube',   color: 'oklch(0.68 0.21 25)',  Logo: LogoYouTube },
-  instagram: { name: 'Instagram', color: 'oklch(0.70 0.20 340)', Logo: LogoInstagram },
-  tiktok:    { name: 'TikTok',    color: 'oklch(0.85 0.15 200)', Logo: LogoTikTok },
+  youtube:   { name: 'YouTube',   color: 'oklch(0.68 0.21 25)' },
+  instagram: { name: 'Instagram', color: 'oklch(0.70 0.20 340)' },
+  tiktok:    { name: 'TikTok',    color: 'oklch(0.85 0.15 200)' },
 }
 
 function PlatformToggle({ platform, enabled, locked, onToggle, status, detail }: {
@@ -413,8 +314,6 @@ export default function PostPage() {
     setRunning(false)
   }
 
-  const captionWithTags = useMemo(() => caption + (hashtags.length ? '\n\n' + hashtags.join(' ') : ''), [caption, hashtags])
-
   const enabledCount = Object.values(enabled).filter(Boolean).length
   const successCount = Object.values(statuses).filter(s => s.state === 'success').length
   const allPosted = successCount === enabledCount && enabledCount > 0 && Object.values(statuses).some(s => s.state === 'success')
@@ -433,10 +332,8 @@ export default function PostPage() {
   }
 
   return (
-    <div className="post-layout" style={{ maxWidth: 1280, margin: '0 auto', gap: 'var(--gap)' }}>
-      {/* ── LEFT: Composer ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-        {/* Header */}
+    <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      {/* Header */}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <div className="micro" style={{ marginBottom: 4 }}>Compose</div>
@@ -690,30 +587,7 @@ export default function PostPage() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ── RIGHT: Live previews ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <div className="micro">Live preview</div>
-          <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>updates as you type</span>
-        </div>
-        {videoType === 'long' ? (
-          <>
-            <PreviewYouTube caption={ytCaption} enabled={enabled.youtube} />
-            <div className="card" style={{ padding: 14, opacity: 0.5 }}>
-              <div className="micro" style={{ marginBottom: 6 }}>Instagram / TikTok</div>
-              <div style={{ fontSize: 12.5, color: 'var(--text-mute)', lineHeight: 1.5 }}>Long-form videos can&apos;t post here directly. Trim a 60s teaser to cross-post.</div>
-            </div>
-          </>
-        ) : (
-          <>
-            <PreviewTikTok    caption={captionWithTags} enabled={enabled.tiktok} />
-            <PreviewInstagram caption={captionWithTags} enabled={enabled.instagram} />
-            <PreviewYouTube   caption={ytCaption}   enabled={enabled.youtube} />
-          </>
-        )}
-      </div>
     </div>
   )
 }
