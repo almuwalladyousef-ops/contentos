@@ -34,6 +34,11 @@ type AccountsResponse = {
   }>
 }
 
+type PageIdentityResponse = PageInstagramResponse & {
+  id?: string
+  name?: string
+}
+
 type TokenExchangeResponse = {
   access_token?: string
   token_type?: string
@@ -135,15 +140,34 @@ async function resolveFromPage(pageId: string, token: string) {
   return page.instagram_business_account?.id
 }
 
+async function resolveFromTokenPage(token: string) {
+  const page = await fetchGraph<PageIdentityResponse>('me', {
+    fields: 'id,name,instagram_business_account{id,username}',
+    access_token: token,
+  })
+  return page.instagram_business_account?.id
+}
+
 async function resolveFromUserPages(token: string, preferredPageId?: string) {
   const accounts = await fetchGraph<AccountsResponse>('me/accounts', {
     fields: 'id,name,access_token,instagram_business_account{id,username}',
     access_token: token,
   })
-  if (!accounts.data?.length || !preferredPageId) return null
+  if (!accounts.data?.length) return null
 
-  const preferred = accounts.data.find(page => page.id === preferredPageId)
+  const preferred = preferredPageId ? accounts.data.find(page => page.id === preferredPageId) : null
+  if (preferredPageId && !preferred) return null
   return preferred?.instagram_business_account?.id ?? null
+}
+
+async function resolveSingleConnectedInstagramAccount(token: string) {
+  const accounts = await fetchGraph<AccountsResponse>('me/accounts', {
+    fields: 'id,name,instagram_business_account{id,username}',
+    access_token: token,
+  })
+  const connected = accounts.data?.filter(page => page.instagram_business_account?.id) ?? []
+  if (connected.length !== 1) return null
+  return connected[0].instagram_business_account?.id ?? null
 }
 
 export async function resolveInstagramCredentials(creds: Credentials): Promise<{
@@ -161,7 +185,9 @@ export async function resolveInstagramCredentials(creds: Credentials): Promise<{
   let resolvedId: string | null = null
   if (isMissingMediaEdge(probe.error)) {
     resolvedId = await resolveFromPage(savedAccountId, token) ?? null
+    resolvedId ??= await resolveFromTokenPage(token) ?? null
     resolvedId ??= await resolveFromUserPages(token, savedAccountId)
+    resolvedId ??= await resolveSingleConnectedInstagramAccount(token)
   }
 
   if (!resolvedId || resolvedId === savedAccountId) {

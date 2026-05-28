@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const resolved = await resolveInstagramCredentials(creds)
     if (resolved.mediaError) {
       return NextResponse.json({
-        error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Paste the connected Instagram Business Account ID, not the Facebook Page ID.', resolved.mediaError),
+        error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Reconnect Instagram in Settings so ContentOS can fetch the correct account ID.', resolved.mediaError),
       }, { status: 400 })
     }
     creds = resolved.creds
