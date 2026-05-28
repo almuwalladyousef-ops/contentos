@@ -239,9 +239,6 @@ function SettingsContent() {
     }
   }
 
-  const [igRefreshing, setIgRefreshing] = useState(false)
-  const [igRefreshMsg, setIgRefreshMsg] = useState<{ ok: boolean; text: string } | null>(null)
-
   function handleIgConnect() {
     const url = `/api/auth/instagram/connect?slot=${slot}`
     const popup = window.open(url, 'instagram-auth', 'width=640,height=760,scrollbars=yes,resizable=yes')
@@ -258,26 +255,6 @@ function SettingsContent() {
       setAllCreds(prev => ({ ...prev, [slot]: { ...prev[slot], ig_access_token: '', ig_account_id: '' } }))
     } catch { /* ignore */ } finally {
       setDisconnecting(false)
-    }
-  }
-
-  async function handleIgRefresh() {
-    setIgRefreshing(true); setIgRefreshMsg(null)
-    try {
-      const res = await fetch(`/api/platforms/instagram/refresh-token?slot=${slot}`, { method: 'POST' })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setIgRefreshMsg({ ok: true, text: `Token refreshed — expires in ~${data.expires_in_days} days` })
-      // Reload credentials so the new token shows in the field
-      const credsRes = await fetch('/api/drive/credentials?slot=all')
-      const credsData = await credsRes.json()
-      if (credsData && !credsData.error) {
-        setAllCreds({ personal: credsData.personal ?? {}, business: credsData.business ?? {} })
-      }
-    } catch (e: unknown) {
-      setIgRefreshMsg({ ok: false, text: String(e) })
-    } finally {
-      setIgRefreshing(false)
     }
   }
 
@@ -354,7 +331,7 @@ function SettingsContent() {
 
       <IntegrationCard
         title="Instagram"
-        sub="Reels via Graph API · token + Business account ID"
+        sub="Reels via Graph API"
         connected={igConnectedSlot}
         actionLabel={igConnectedSlot ? 'Reconnect' : 'Connect Instagram'}
         onAction={handleIgConnect}
@@ -362,40 +339,7 @@ function SettingsContent() {
         onSecondary={handleIgDisconnect}
         icon={<LogoInstagram size={20} />}
         color="oklch(0.70 0.20 340)"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Field
-            label="Access token"
-            value={creds.ig_access_token ?? ''}
-            show={showKeys}
-            onChange={v => setCred('ig_access_token', v)}
-            placeholder="Paste access token…"
-          />
-          <Field
-            label="Business account ID"
-            value={creds.ig_account_id ?? ''}
-            mono
-            onChange={v => setCred('ig_account_id', v)}
-            placeholder="e.g. 17841465850620700"
-          />
-          {creds.ig_access_token && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                className="btn tiny"
-                onClick={handleIgRefresh}
-                disabled={igRefreshing}
-              >
-                {igRefreshing ? 'Refreshing…' : 'Refresh token'}
-              </button>
-              {igRefreshMsg && (
-                <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
-                  {igRefreshMsg.text}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </IntegrationCard>
+      />
 
       {/* AI section */}
       <SectionHead eyebrow="AI" title="Analysis providers" />
