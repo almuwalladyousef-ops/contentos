@@ -158,13 +158,15 @@ function SettingsContent() {
 
   const ttConnected = searchParams.get('tt_connected') === '1'
   const ttError = searchParams.get('tt_error')
+  const igConnected = searchParams.get('ig_connected') === '1'
+  const igError = searchParams.get('ig_error')
 
   useEffect(() => {
-    if (ttConnected && typeof window !== 'undefined' && window.opener) {
+    if ((ttConnected || igConnected) && typeof window !== 'undefined' && window.opener) {
       window.opener.location.reload()
       window.close()
     }
-  }, [ttConnected])
+  }, [ttConnected, igConnected])
 
   useEffect(() => {
     fetch('/api/auth/status')
@@ -240,6 +242,25 @@ function SettingsContent() {
   const [igRefreshing, setIgRefreshing] = useState(false)
   const [igRefreshMsg, setIgRefreshMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  function handleIgConnect() {
+    const url = `/api/auth/instagram/connect?slot=${slot}`
+    const popup = window.open(url, 'instagram-auth', 'width=640,height=760,scrollbars=yes,resizable=yes')
+    if (!popup) window.location.href = url
+  }
+
+  async function handleIgDisconnect() {
+    setDisconnecting(true)
+    try {
+      const { ig_access_token: _token, ig_account_id: _accountId, ...rest } = creds
+      void _token
+      void _accountId
+      await fetch('/api/drive/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...rest, slot }) })
+      setAllCreds(prev => ({ ...prev, [slot]: { ...prev[slot], ig_access_token: '', ig_account_id: '' } }))
+    } catch { /* ignore */ } finally {
+      setDisconnecting(false)
+    }
+  }
+
   async function handleIgRefresh() {
     setIgRefreshing(true); setIgRefreshMsg(null)
     try {
@@ -292,6 +313,16 @@ function SettingsContent() {
           TikTok connection failed: {ttError}
         </div>
       )}
+      {igConnected && (
+        <div style={{ background: 'oklch(0.78 0.16 155 / 0.12)', border: '1px solid oklch(0.78 0.16 155 / 0.3)', color: 'var(--ok)', padding: '10px 16px', borderRadius: 10, fontSize: 13 }}>
+          Instagram connected successfully
+        </div>
+      )}
+      {igError && (
+        <div style={{ background: 'oklch(0.70 0.19 25 / 0.1)', border: '1px solid oklch(0.70 0.19 25 / 0.3)', color: 'var(--bad)', padding: '10px 16px', borderRadius: 10, fontSize: 13 }}>
+          Instagram connection failed: {igError}
+        </div>
+      )}
 
       {/* Integrations section */}
       <SectionHead eyebrow="Connections" title="Integrations" />
@@ -325,6 +356,10 @@ function SettingsContent() {
         title="Instagram"
         sub="Reels via Graph API · token + Business account ID"
         connected={igConnectedSlot}
+        actionLabel={igConnectedSlot ? 'Reconnect' : 'Connect Instagram'}
+        onAction={handleIgConnect}
+        secondaryAction={igConnectedSlot ? (disconnecting ? '…' : 'Disconnect') : null}
+        onSecondary={handleIgDisconnect}
         icon={<LogoInstagram size={20} />}
         color="oklch(0.70 0.20 340)"
       >

@@ -34,6 +34,21 @@ type AccountsResponse = {
   }>
 }
 
+type TokenExchangeResponse = {
+  access_token?: string
+  token_type?: string
+  expires_in?: number
+  error?: GraphError
+}
+
+export type InstagramAccountConnection = {
+  accessToken: string
+  accountId: string
+  username?: string
+  pageId?: string
+  pageName?: string
+}
+
 export function instagramGraphUrl(path: string, params: Record<string, string>) {
   const url = new URL(`${INSTAGRAM_GRAPH_BASE}/${path}`)
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
@@ -43,6 +58,60 @@ export function instagramGraphUrl(path: string, params: Record<string, string>) 
 async function fetchGraph<T>(path: string, params: Record<string, string>): Promise<GraphResponse<T>> {
   const res = await fetch(instagramGraphUrl(path, params))
   return await res.json() as GraphResponse<T>
+}
+
+export function getInstagramAppCredentials(slot: 'personal' | 'business') {
+  const envSlot = slot.toUpperCase()
+  const appId = process.env[`FACEBOOK_APP_ID_${envSlot}`] ?? process.env.FACEBOOK_APP_ID
+  const appSecret = process.env[`FACEBOOK_APP_SECRET_${envSlot}`] ?? process.env.FACEBOOK_APP_SECRET
+  return { appId, appSecret, envSlot }
+}
+
+export async function exchangeFacebookCodeForToken(params: {
+  code: string
+  redirectUri: string
+  appId: string
+  appSecret: string
+}) {
+  return await fetchGraph<TokenExchangeResponse>('oauth/access_token', {
+    client_id: params.appId,
+    client_secret: params.appSecret,
+    redirect_uri: params.redirectUri,
+    code: params.code,
+  })
+}
+
+export async function exchangeForLongLivedToken(params: {
+  accessToken: string
+  appId: string
+  appSecret: string
+}) {
+  return await fetchGraph<TokenExchangeResponse>('oauth/access_token', {
+    grant_type: 'fb_exchange_token',
+    client_id: params.appId,
+    client_secret: params.appSecret,
+    fb_exchange_token: params.accessToken,
+  })
+}
+
+export async function findInstagramAccountConnection(accessToken: string): Promise<InstagramAccountConnection | null> {
+  const accounts = await fetchGraph<AccountsResponse>('me/accounts', {
+    fields: 'id,name,access_token,instagram_business_account{id,username}',
+    access_token: accessToken,
+  })
+  if (accounts.error) return null
+
+  const page = accounts.data?.find(item => item.instagram_business_account?.id)
+  const accountId = page?.instagram_business_account?.id
+  if (!page || !accountId) return null
+
+  return {
+    accessToken,
+    accountId,
+    username: page.instagram_business_account?.username,
+    pageId: page.id,
+    pageName: page.name,
+  }
 }
 
 function isMissingMediaEdge(error?: GraphError) {
