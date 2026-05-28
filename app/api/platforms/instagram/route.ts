@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
-
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
+import { ensureFolderStructure, getCredentials, saveCredentials } from '@/lib/drive'
+import { instagramGraphErrorMessage, instagramGraphUrl, resolveInstagramCredentials } from '@/lib/instagram'
 
 type InsightMetricMap = Record<string, number>
-
-function graphUrl(path: string, params: Record<string, string>) {
-  const url = new URL(`${GRAPH_BASE}/${path}`)
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
-  return url.toString()
-}
 
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
@@ -22,12 +15,11 @@ function toFiniteNumber(value: unknown): number | undefined {
 }
 
 async function fetchInsightMetric(mediaId: string, metric: string, token: string): Promise<InsightMetricMap> {
-  const url = new URL(`${GRAPH_BASE}/${mediaId}/insights`)
-  url.searchParams.set('metric', metric)
-  url.searchParams.set('period', 'lifetime')
-  url.searchParams.set('access_token', token)
-
-  const res = await fetch(url.toString())
+  const res = await fetch(instagramGraphUrl(`${mediaId}/insights`, {
+    metric,
+    period: 'lifetime',
+    access_token: token,
+  }))
   const data = await res.json()
   if (data.error) {
     console.warn(`[IG insights] ${mediaId}/${metric}:`, data.error?.message, data.error?.code)
@@ -54,8 +46,22 @@ export async function GET() {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
-  const creds = await getCredentials(account.accessToken, status.active)
+  let creds = await getCredentials(account.accessToken, status.active)
   if (!creds?.ig_access_token || !creds?.ig_account_id) {
+    return NextResponse.json({ error: 'Instagram not connected. Add credentials in Settings.' }, { status: 400 })
+  }
+  const resolved = await resolveInstagramCredentials(creds)
+  if (resolved.mediaError) {
+    return NextResponse.json({
+      error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Paste the connected Instagram Business Account ID, not the Facebook Page ID.', resolved.mediaError),
+    }, { status: 400 })
+  }
+  creds = resolved.creds
+  if (resolved.changed) {
+    const { rootId } = await ensureFolderStructure(account.accessToken)
+    await saveCredentials(account.accessToken, rootId, creds, status.active)
+  }
+  if (!creds.ig_access_token || !creds.ig_account_id) {
     return NextResponse.json({ error: 'Instagram not connected. Add credentials in Settings.' }, { status: 400 })
   }
 
@@ -63,12 +69,12 @@ export async function GET() {
 
   try {
     const [mediaRes, accountRes] = await Promise.all([
-      fetch(graphUrl(`${ig_account_id}/media`, {
+      fetch(instagramGraphUrl(`${ig_account_id}/media`, {
         fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration',
         limit: '20',
         access_token: ig_access_token,
       })),
-      fetch(graphUrl(ig_account_id, { fields: 'followers_count', access_token: ig_access_token })),
+      fetch(instagramGraphUrl(ig_account_id, { fields: 'followers_count', access_token: ig_access_token })),
     ])
     const [mediaData, accountData] = await Promise.all([mediaRes.json(), accountRes.json()])
     const followersCount: number | undefined = toFiniteNumber(accountData.followers_count)
@@ -109,7 +115,7 @@ export async function GET() {
             'ig_reels_video_view_total_time',
           ], ig_access_token),
           (item.video_duration == null && item.duration == null)
-            ? fetch(graphUrl(item.id, { fields: 'video_duration,duration', access_token: ig_access_token }))
+            ? fetch(instagramGraphUrl(item.id, { fields: 'video_duration,duration', access_token: ig_access_token }))
             : Promise.resolve(null),
         ])
 

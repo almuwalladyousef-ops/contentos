@@ -1,24 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
+import { ensureFolderStructure, getCredentials, saveCredentials } from '@/lib/drive'
+import { instagramGraphErrorMessage, instagramGraphUrl, resolveInstagramCredentials } from '@/lib/instagram'
 
 export const maxDuration = 120
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-function graphUrl(path: string, params: Record<string, string>) {
-  const url = new URL(`https://graph.facebook.com/v21.0/${path}`)
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
-  return url.toString()
-}
 
 export async function POST(req: NextRequest) {
   const [account, accountsStatus] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   try {
-    const creds = await getCredentials(account.accessToken, accountsStatus.active)
+    let creds = await getCredentials(account.accessToken, accountsStatus.active)
     if (!creds?.ig_access_token || !creds?.ig_account_id) {
+      return NextResponse.json({ error: 'Instagram credentials not set in Settings' }, { status: 400 })
+    }
+    const resolved = await resolveInstagramCredentials(creds)
+    if (resolved.mediaError) {
+      return NextResponse.json({
+        error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Paste the connected Instagram Business Account ID, not the Facebook Page ID.', resolved.mediaError),
+      }, { status: 400 })
+    }
+    creds = resolved.creds
+    if (resolved.changed) {
+      const { rootId } = await ensureFolderStructure(account.accessToken)
+      await saveCredentials(account.accessToken, rootId, creds, accountsStatus.active)
+    }
+    if (!creds.ig_access_token || !creds.ig_account_id) {
       return NextResponse.json({ error: 'Instagram credentials not set in Settings' }, { status: 400 })
     }
 
@@ -34,7 +43,7 @@ export async function POST(req: NextRequest) {
       caption: caption || '',
       access_token: ig_access_token,
     })
-    const containerRes = await fetch(graphUrl(`${ig_account_id}/media`, {}), {
+    const containerRes = await fetch(instagramGraphUrl(`${ig_account_id}/media`, {}), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: containerParams,
@@ -51,7 +60,7 @@ export async function POST(req: NextRequest) {
     while (attempts < 40) {
       await sleep(3000)
       const statusRes = await fetch(
-        graphUrl(creationId, { fields: 'status_code', access_token: ig_access_token })
+        instagramGraphUrl(creationId, { fields: 'status_code', access_token: ig_access_token })
       )
       const statusData = await statusRes.json()
       if (statusData.status_code === 'FINISHED') break
@@ -69,7 +78,7 @@ export async function POST(req: NextRequest) {
       creation_id: creationId,
       access_token: ig_access_token,
     })
-    const publishRes = await fetch(graphUrl(`${ig_account_id}/media_publish`, {}), {
+    const publishRes = await fetch(instagramGraphUrl(`${ig_account_id}/media_publish`, {}), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: publishParams,

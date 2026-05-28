@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
-
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
-
-function graphUrl(path: string, params: Record<string, string>) {
-  const url = new URL(`${GRAPH_BASE}/${path}`)
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
-  return url.toString()
-}
+import { ensureFolderStructure, getCredentials, saveCredentials } from '@/lib/drive'
+import { instagramGraphErrorMessage, instagramGraphUrl, resolveInstagramCredentials } from '@/lib/instagram'
 
 async function fetchInsightMetric(mediaId: string, metric: string, token: string) {
-  const url = new URL(`${GRAPH_BASE}/${mediaId}/insights`)
-  url.searchParams.set('metric', metric)
-  url.searchParams.set('period', 'lifetime')
-  url.searchParams.set('access_token', token)
-
-  const res = await fetch(url.toString())
+  const res = await fetch(instagramGraphUrl(`${mediaId}/insights`, {
+    metric,
+    period: 'lifetime',
+    access_token: token,
+  }))
   return {
     metric,
     status: res.status,
@@ -28,9 +20,23 @@ export async function GET(req: NextRequest) {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
-  const creds = await getCredentials(account.accessToken, status.active)
+  let creds = await getCredentials(account.accessToken, status.active)
   if (!creds?.ig_access_token) return NextResponse.json({ error: 'Instagram not connected' }, { status: 400 })
   if (!creds.ig_account_id) return NextResponse.json({ error: 'Instagram business account ID not set' }, { status: 400 })
+  const resolved = await resolveInstagramCredentials(creds)
+  if (resolved.mediaError) {
+    return NextResponse.json({
+      error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Paste the connected Instagram Business Account ID, not the Facebook Page ID.', resolved.mediaError),
+    }, { status: 400 })
+  }
+  creds = resolved.creds
+  if (resolved.changed) {
+    const { rootId } = await ensureFolderStructure(account.accessToken)
+    await saveCredentials(account.accessToken, rootId, creds, status.active)
+  }
+  if (!creds.ig_access_token || !creds.ig_account_id) {
+    return NextResponse.json({ error: 'Instagram credentials not set in Settings' }, { status: 400 })
+  }
 
   const { ig_access_token, ig_account_id } = creds
 
@@ -38,11 +44,11 @@ export async function GET(req: NextRequest) {
   const mediaId = req.nextUrl.searchParams.get('id')
   if (!mediaId) {
     const [accountRes, mediaListRes] = await Promise.all([
-      fetch(graphUrl(ig_account_id, {
+      fetch(instagramGraphUrl(ig_account_id, {
         fields: 'id,name,username,account_type,followers_count,media_count',
         access_token: ig_access_token,
       })),
-      fetch(graphUrl(`${ig_account_id}/media`, {
+      fetch(instagramGraphUrl(`${ig_account_id}/media`, {
         fields: 'id,media_type,media_product_type,timestamp',
         limit: '3',
         access_token: ig_access_token,
@@ -64,15 +70,15 @@ export async function GET(req: NextRequest) {
     'ig_reels_video_view_total_time',
   ]
   const [mediaRes, durationRes, insightResults] = await Promise.all([
-    fetch(graphUrl(mediaId, {
+    fetch(instagramGraphUrl(mediaId, {
       fields: 'id,media_type,media_product_type,video_duration,duration,timestamp',
       access_token: ig_access_token,
     })),
-    fetch(graphUrl(mediaId, { fields: 'video_duration,duration', access_token: ig_access_token })),
+    fetch(instagramGraphUrl(mediaId, { fields: 'video_duration,duration', access_token: ig_access_token })),
     Promise.all(insightMetrics.map(metric => fetchInsightMetric(mediaId, metric, ig_access_token))),
   ])
 
   const [media, duration] = await Promise.all([mediaRes.json(), durationRes.json()])
 
-  return NextResponse.json({ slot: status.active, media, duration, insights: insightResults })
+  return NextResponse.json({ slot: status.active, ig_account_id, media, duration, insights: insightResults })
 }
