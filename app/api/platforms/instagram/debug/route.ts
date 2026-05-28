@@ -19,9 +19,6 @@ async function fetchInsightMetric(mediaId: string, metric: string, token: string
 export async function GET(req: NextRequest) {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
-  if (status.active !== 'business') {
-    return NextResponse.json({ error: 'Instagram debug uses the business account. Switch to Business in the sidebar.' }, { status: 400 })
-  }
 
   let creds = await getCredentials(account.accessToken, status.active)
   if (!creds?.ig_access_token) return NextResponse.json({ error: 'Instagram not connected' }, { status: 400 })

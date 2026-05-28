@@ -8,9 +8,6 @@ export async function POST(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
   const requestedSlot = toAccountSlot(req.nextUrl.searchParams.get('slot'), status.active)
-  if (requestedSlot !== 'business') {
-    return NextResponse.json({ error: 'Instagram tokens are stored on the business account only.' }, { status: 400 })
-  }
   const envSlot = requestedSlot.toUpperCase() // 'PERSONAL' or 'BUSINESS'
   const appId = process.env[`FACEBOOK_APP_ID_${envSlot}`] ?? process.env.FACEBOOK_APP_ID
   const appSecret = process.env[`FACEBOOK_APP_SECRET_${envSlot}`] ?? process.env.FACEBOOK_APP_SECRET

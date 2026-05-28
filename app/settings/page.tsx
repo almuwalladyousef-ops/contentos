@@ -55,7 +55,7 @@ function SectionHead({ eyebrow, title }: { eyebrow?: string; title: string }) {
   )
 }
 
-function IntegrationCard({ title, sub, connected, identity, actionLabel, onAction, secondaryAction, onSecondary, icon, color, statusLabel, statusTone, children }: {
+function IntegrationCard({ title, sub, connected, identity, actionLabel, onAction, secondaryAction, onSecondary, icon, color, children }: {
   title: string
   sub: string
   connected: boolean
@@ -66,13 +66,8 @@ function IntegrationCard({ title, sub, connected, identity, actionLabel, onActio
   onSecondary?: () => void
   icon?: React.ReactNode
   color?: string
-  statusLabel?: string
-  statusTone?: 'ok' | 'neutral'
   children?: React.ReactNode
 }) {
-  const label = statusLabel ?? (connected ? 'connected' : 'not connected')
-  const tone = statusTone ?? (connected ? 'ok' : 'neutral')
-
   return (
     <div className="card" style={{ padding: 'var(--pad)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -89,7 +84,11 @@ function IntegrationCard({ title, sub, connected, identity, actionLabel, onActio
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
-            <span className={`pill${tone === 'ok' ? ' ok' : ''}`} style={{ height: 18, fontSize: 10 }}><span className="dot" /> {label}</span>
+            {connected ? (
+              <span className="pill ok" style={{ height: 18, fontSize: 10 }}><span className="dot" /> connected</span>
+            ) : (
+              <span className="pill" style={{ height: 18, fontSize: 10 }}><span className="dot" /> not connected</span>
+            )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-mute)', marginTop: 2 }}>{sub}</div>
           {identity && (
@@ -263,10 +262,8 @@ function SettingsContent() {
 
   const acc = accountStatus?.[slot]
   const ttConnectedSlot = !!ttTokens[slot]
-  const isBusinessSlot = slot === 'business'
-  const igConnectedSlot = isBusinessSlot && !!creds.ig_access_token && !!creds.ig_account_id
+  const igConnectedSlot = !!creds.ig_access_token && !!creds.ig_account_id
   const connectedCount = [acc, ttConnectedSlot, igConnectedSlot, creds.groq_api_key, creds.gemini_api_key].filter(Boolean).length
-  const connectionTotal = isBusinessSlot ? 5 : 4
 
   return (
     <div className="anim-up" style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -277,7 +274,7 @@ function SettingsContent() {
           <h1 className="h1">Settings</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="pill"><span className="dot" style={{ background: 'var(--ok)' }} />{connectedCount}/{connectionTotal} connected</span>
+          <span className="pill"><span className="dot" style={{ background: 'var(--ok)' }} />{connectedCount}/5 connected</span>
           <button className="btn ghost" onClick={() => setShowKeys(s => !s)}>
             <IconKey size={14} /> {showKeys ? 'Hide' : 'Show'} keys
           </button>
@@ -328,44 +325,41 @@ function SettingsContent() {
         title="Instagram"
         sub="Reels via Graph API · token + Business account ID"
         connected={igConnectedSlot}
-        statusLabel={isBusinessSlot ? undefined : 'business only'}
         icon={<LogoInstagram size={20} />}
         color="oklch(0.70 0.20 340)"
       >
-        {isBusinessSlot && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Field
-              label="Access token"
-              value={creds.ig_access_token ?? ''}
-              show={showKeys}
-              onChange={v => setCred('ig_access_token', v)}
-              placeholder="Paste access token…"
-            />
-            <Field
-              label="Business account ID"
-              value={creds.ig_account_id ?? ''}
-              mono
-              onChange={v => setCred('ig_account_id', v)}
-              placeholder="e.g. 17841465850620700"
-            />
-            {creds.ig_access_token && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <button
-                  className="btn tiny"
-                  onClick={handleIgRefresh}
-                  disabled={igRefreshing}
-                >
-                  {igRefreshing ? 'Refreshing…' : 'Refresh token'}
-                </button>
-                {igRefreshMsg && (
-                  <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
-                    {igRefreshMsg.text}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Field
+            label="Access token"
+            value={creds.ig_access_token ?? ''}
+            show={showKeys}
+            onChange={v => setCred('ig_access_token', v)}
+            placeholder="Paste access token…"
+          />
+          <Field
+            label="Business account ID"
+            value={creds.ig_account_id ?? ''}
+            mono
+            onChange={v => setCred('ig_account_id', v)}
+            placeholder="e.g. 17841465850620700"
+          />
+          {creds.ig_access_token && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                className="btn tiny"
+                onClick={handleIgRefresh}
+                disabled={igRefreshing}
+              >
+                {igRefreshing ? 'Refreshing…' : 'Refresh token'}
+              </button>
+              {igRefreshMsg && (
+                <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
+                  {igRefreshMsg.text}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </IntegrationCard>
 
       {/* AI section */}
