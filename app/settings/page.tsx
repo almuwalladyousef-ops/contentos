@@ -262,7 +262,8 @@ function SettingsContent() {
 
   const acc = accountStatus?.[slot]
   const ttConnectedSlot = !!ttTokens[slot]
-  const igConnectedSlot = !!creds.ig_access_token && !!creds.ig_account_id
+  const isBusinessSlot = slot === 'business'
+  const igConnectedSlot = isBusinessSlot && !!creds.ig_access_token && !!creds.ig_account_id
   const connectedCount = [acc, ttConnectedSlot, igConnectedSlot, creds.groq_api_key, creds.gemini_api_key].filter(Boolean).length
 
   return (
@@ -328,38 +329,40 @@ function SettingsContent() {
         icon={<LogoInstagram size={20} />}
         color="oklch(0.70 0.20 340)"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Field
-            label="Access token"
-            value={creds.ig_access_token ?? ''}
-            show={showKeys}
-            onChange={v => setCred('ig_access_token', v)}
-            placeholder="Paste access token…"
-          />
-          <Field
-            label="Business account ID"
-            value={creds.ig_account_id ?? ''}
-            mono
-            onChange={v => setCred('ig_account_id', v)}
-            placeholder="e.g. 17841465850620700"
-          />
-          {creds.ig_access_token && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                className="btn tiny"
-                onClick={handleIgRefresh}
-                disabled={igRefreshing}
-              >
-                {igRefreshing ? 'Refreshing…' : 'Refresh token'}
-              </button>
-              {igRefreshMsg && (
-                <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
-                  {igRefreshMsg.text}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        {isBusinessSlot && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Field
+              label="Access token"
+              value={creds.ig_access_token ?? ''}
+              show={showKeys}
+              onChange={v => setCred('ig_access_token', v)}
+              placeholder="Paste access token…"
+            />
+            <Field
+              label="Business account ID"
+              value={creds.ig_account_id ?? ''}
+              mono
+              onChange={v => setCred('ig_account_id', v)}
+              placeholder="e.g. 17841465850620700"
+            />
+            {creds.ig_access_token && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn tiny"
+                  onClick={handleIgRefresh}
+                  disabled={igRefreshing}
+                >
+                  {igRefreshing ? 'Refreshing…' : 'Refresh token'}
+                </button>
+                {igRefreshMsg && (
+                  <span style={{ fontSize: 12, color: igRefreshMsg.ok ? 'var(--ok)' : 'var(--bad)' }}>
+                    {igRefreshMsg.text}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </IntegrationCard>
 
       {/* AI section */}

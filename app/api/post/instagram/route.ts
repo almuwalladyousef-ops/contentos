@@ -10,6 +10,9 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 export async function POST(req: NextRequest) {
   const [account, accountsStatus] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+  if (accountsStatus.active !== 'business') {
+    return NextResponse.json({ error: 'Instagram posting uses the business account. Switch to Business in the sidebar.' }, { status: 400 })
+  }
 
   try {
     let creds = await getCredentials(account.accessToken, accountsStatus.active)

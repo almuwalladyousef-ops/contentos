@@ -11,6 +11,13 @@ import { PostStatus } from '@/lib/types'
 
 type Platform = 'youtube' | 'instagram' | 'tiktok'
 type VideoType = 'short' | 'long'
+type AccountSlot = 'personal' | 'business'
+
+interface AccountStatus {
+  active: AccountSlot
+  personal: { email: string } | null
+  business: { email: string } | null
+}
 
 interface PlatStatus { state: PostStatus; message: string }
 const initialStatus = (): Record<Platform, PlatStatus> => ({
@@ -162,14 +169,22 @@ export default function PostPage() {
   const [suggestedCaptions, setSuggestedCaptions] = useState<string[]>([])
   const [suggestedHashtags, setSuggestedHashtags] = useState<string[]>([])
   const [suggestedYtTitles, setSuggestedYtTitles] = useState<string[]>([])
+  const [activeSlot, setActiveSlot] = useState<AccountSlot>('personal')
+
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(r => r.json())
+      .then((status: AccountStatus) => setActiveSlot(status.active))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (videoType === 'long') {
       setEnabled({ youtube: true, instagram: false, tiktok: false })
     } else {
-      setEnabled({ youtube: true, instagram: true, tiktok: true })
+      setEnabled({ youtube: true, instagram: activeSlot === 'business', tiktok: true })
     }
-  }, [videoType])
+  }, [videoType, activeSlot])
 
   useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__uploadRunning = running
@@ -181,6 +196,7 @@ export default function PostPage() {
 
   function togglePlatform(p: Platform) {
     if (videoType === 'long' && p !== 'youtube') return
+    if (p === 'instagram' && activeSlot !== 'business') return
     setEnabled(e => ({ ...e, [p]: !e[p] }))
   }
 
@@ -317,6 +333,7 @@ export default function PostPage() {
   const enabledCount = Object.values(enabled).filter(Boolean).length
   const successCount = Object.values(statuses).filter(s => s.state === 'success').length
   const allPosted = successCount === enabledCount && enabledCount > 0 && Object.values(statuses).some(s => s.state === 'success')
+  const instagramLocked = videoType === 'long' || activeSlot !== 'business'
 
   function addTag(raw: string) {
     let t = raw.trim().replace(/\s+/g, '')
@@ -529,7 +546,7 @@ export default function PostPage() {
           </div>
           <div className="platform-grid-3" style={{ gap: 12 }}>
             <PlatformToggle platform="youtube"   enabled={enabled.youtube}   locked={false}                        onToggle={() => togglePlatform('youtube')}   status={statuses.youtube.state}   detail={`${videoType === 'long' ? 'Video' : 'Shorts'} · ${privacy}`} />
-            <PlatformToggle platform="instagram" enabled={enabled.instagram} locked={videoType === 'long'}          onToggle={() => togglePlatform('instagram')} status={statuses.instagram.state} detail="public" />
+            <PlatformToggle platform="instagram" enabled={enabled.instagram} locked={instagramLocked}              onToggle={() => togglePlatform('instagram')} status={statuses.instagram.state} detail={activeSlot === 'business' ? 'public' : 'business'} />
             <PlatformToggle platform="tiktok"    enabled={enabled.tiktok}    locked={videoType === 'long'}          onToggle={() => togglePlatform('tiktok')}    status={statuses.tiktok.state}    detail={ttPrivacy === 'PUBLIC_TO_EVERYONE' ? 'public' : ttPrivacy === 'FOLLOWER_OF_CREATOR' ? 'followers' : 'only me'} />
           </div>
 
