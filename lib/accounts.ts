@@ -3,6 +3,14 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 
 export type AccountSlot = 'personal' | 'business'
 
+export function isAccountSlot(value: unknown): value is AccountSlot {
+  return value === 'personal' || value === 'business'
+}
+
+export function toAccountSlot(value: unknown, fallback: AccountSlot = 'personal'): AccountSlot {
+  return isAccountSlot(value) ? value : fallback
+}
+
 export interface StoredAccount {
   email: string
   access_token: string
@@ -53,7 +61,7 @@ export function encryptAccount(account: StoredAccount): string {
 
 export async function getAccountsStatus() {
   const jar = await cookies()
-  const stored = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  const stored = toAccountSlot(jar.get('cms_active')?.value)
   // Only respect a non-personal active slot if the user explicitly switched
   // this browser session (cms_switched is a session cookie, cleared on browser close).
   // This ensures fresh loads always land on personal, not a stale 'business' cookie.
@@ -128,7 +136,7 @@ async function getAccountBySlot(slot: AccountSlot): Promise<{ accessToken: strin
 
 export async function getActiveAccount(): Promise<{ accessToken: string; email: string; slot: AccountSlot } | null> {
   const jar = await cookies()
-  const stored = (jar.get('cms_active')?.value ?? 'personal') as AccountSlot
+  const stored = toAccountSlot(jar.get('cms_active')?.value)
   const explicitlySwitched = !!jar.get('cms_switched')?.value
   const active: AccountSlot = explicitlySwitched ? stored : 'personal'
   return getAccountBySlot(active)

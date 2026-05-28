@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, AccountSlot } from '@/lib/accounts'
+import { getPersonalAccount, toAccountSlot } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
-  const slot = (searchParams.get('state') ?? 'personal') as AccountSlot
+  const slot = toAccountSlot(searchParams.get('state'))
   const base = process.env.NEXTAUTH_URL!
 
   if (error || !code) {

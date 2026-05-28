@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { toAccountSlot } from '@/lib/accounts'
 
 export async function GET(req: NextRequest) {
-  const slot = req.nextUrl.searchParams.get('slot') ?? 'personal'
+  const slot = toAccountSlot(req.nextUrl.searchParams.get('slot'))
   const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/tiktok/callback`
 
   const params = new URLSearchParams({

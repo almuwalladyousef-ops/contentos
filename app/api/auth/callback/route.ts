@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AccountSlot, encryptAccount, COOKIE_OPTS } from '@/lib/accounts'
+import { encryptAccount, COOKIE_OPTS, toAccountSlot } from '@/lib/accounts'
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code')
-  const slot = (req.nextUrl.searchParams.get('state') ?? 'personal') as AccountSlot
+  const slot = toAccountSlot(req.nextUrl.searchParams.get('state'))
 
   if (!code) return NextResponse.redirect(new URL('/settings?error=no_code', req.url))
 

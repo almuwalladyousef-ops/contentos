@@ -167,7 +167,13 @@ function SettingsContent() {
   }, [ttConnected])
 
   useEffect(() => {
-    fetch('/api/auth/status').then(r => r.json()).then(setAccountStatus).catch(() => {})
+    fetch('/api/auth/status')
+      .then(r => r.json())
+      .then((status: AccountStatus) => {
+        setAccountStatus(status)
+        setSlot(status.active)
+      })
+      .catch(() => {})
     fetch('/api/drive/credentials?slot=all')
       .then(r => r.json())
       .then(data => {
@@ -237,7 +243,7 @@ function SettingsContent() {
   async function handleIgRefresh() {
     setIgRefreshing(true); setIgRefreshMsg(null)
     try {
-      const res = await fetch('/api/platforms/instagram/refresh-token', { method: 'POST' })
+      const res = await fetch(`/api/platforms/instagram/refresh-token?slot=${slot}`, { method: 'POST' })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setIgRefreshMsg({ ok: true, text: `Token refreshed — expires in ~${data.expires_in_days} days` })
@@ -285,48 +291,6 @@ function SettingsContent() {
           TikTok connection failed: {ttError}
         </div>
       )}
-
-      {/* Slot toggle */}
-      <div className="card" style={{ padding: 8 }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['personal', 'business'] as AccountSlot[]).map(s => {
-            const active = slot === s
-            const slotAcc = accountStatus?.[s]
-            const initials = slotAcc?.email?.slice(0, 2).toUpperCase() ?? s.slice(0, 2).toUpperCase()
-            return (
-              <button
-                key={s}
-                onClick={() => setSlot(s)}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '14px 18px', borderRadius: 10,
-                  background: active ? 'var(--surface-2)' : 'transparent',
-                  border: '1px solid', borderColor: active ? 'var(--border-strong)' : 'transparent',
-                  textAlign: 'left', transition: 'all 120ms ease',
-                }}
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 9,
-                  background: active ? 'linear-gradient(135deg, var(--accent), oklch(0.62 0.16 280))' : 'var(--surface-3)',
-                  display: 'grid', placeItems: 'center',
-                  fontSize: 12, fontWeight: 600,
-                  color: active ? 'oklch(0.18 0.013 255)' : 'var(--text-mute)',
-                  flexShrink: 0,
-                }}>{initials}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, textTransform: 'capitalize', color: active ? 'var(--text)' : 'var(--text-dim)' }}>{s}</span>
-                    {active && <span className="pill accent" style={{ height: 18, fontSize: 10 }}><span className="dot" /> active</span>}
-                  </div>
-                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)', marginTop: 2 }}>
-                    {slotAcc?.email || 'not connected'}
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
       {/* Integrations section */}
       <SectionHead eyebrow="Connections" title="Integrations" />

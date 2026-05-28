@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { switchAccount, AccountSlot } from '@/lib/accounts'
+import { switchAccount, toAccountSlot } from '@/lib/accounts'
 
 export async function POST(req: NextRequest) {
   const { slot } = await req.json()
-  switchAccount(slot as AccountSlot)
+  await switchAccount(toAccountSlot(slot))
   return NextResponse.json({ ok: true })
 }

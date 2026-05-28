@@ -1,19 +1,20 @@
-import { NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
+import { NextRequest, NextResponse } from 'next/server'
+import { getPersonalAccount, getAccountsStatus, toAccountSlot } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
 
-  const slot = status.active.toUpperCase() // 'PERSONAL' or 'BUSINESS'
-  const appId = process.env[`FACEBOOK_APP_ID_${slot}`] ?? process.env.FACEBOOK_APP_ID
-  const appSecret = process.env[`FACEBOOK_APP_SECRET_${slot}`] ?? process.env.FACEBOOK_APP_SECRET
+  const requestedSlot = toAccountSlot(req.nextUrl.searchParams.get('slot'), status.active)
+  const envSlot = requestedSlot.toUpperCase() // 'PERSONAL' or 'BUSINESS'
+  const appId = process.env[`FACEBOOK_APP_ID_${envSlot}`] ?? process.env.FACEBOOK_APP_ID
+  const appSecret = process.env[`FACEBOOK_APP_SECRET_${envSlot}`] ?? process.env.FACEBOOK_APP_SECRET
   if (!appId || !appSecret) {
-    return NextResponse.json({ error: `FACEBOOK_APP_ID_${slot} and FACEBOOK_APP_SECRET_${slot} must be set as environment variables.` }, { status: 500 })
+    return NextResponse.json({ error: `FACEBOOK_APP_ID_${envSlot} and FACEBOOK_APP_SECRET_${envSlot} must be set as environment variables.` }, { status: 500 })
   }
 
-  const creds = await getCredentials(account.accessToken, status.active)
+  const creds = await getCredentials(account.accessToken, requestedSlot)
   if (!creds?.ig_access_token) {
     return NextResponse.json({ error: 'No Instagram token to refresh. Paste one in Settings first.' }, { status: 400 })
   }
@@ -31,7 +32,7 @@ export async function POST() {
   const expiresInDays = Math.round((data.expires_in ?? 5183944) / 86400)
 
   const { rootId } = await ensureFolderStructure(account.accessToken)
-  await saveCredentials(account.accessToken, rootId, { ...creds, ig_access_token: newToken }, status.active)
+  await saveCredentials(account.accessToken, rootId, { ...creds, ig_access_token: newToken }, requestedSlot)
 
-  return NextResponse.json({ ok: true, expires_in_days: expiresInDays })
+  return NextResponse.json({ ok: true, slot: requestedSlot, expires_in_days: expiresInDays })
 }

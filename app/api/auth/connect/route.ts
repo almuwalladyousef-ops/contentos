@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { toAccountSlot } from '@/lib/accounts'
 
 export function GET(req: NextRequest) {
-  const slot = req.nextUrl.searchParams.get('slot') ?? 'personal'
+  const slot = toAccountSlot(req.nextUrl.searchParams.get('slot'))
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,

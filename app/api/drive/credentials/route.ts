@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
+import { getPersonalAccount, getAccountsStatus, toAccountSlot } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 import { Credentials } from '@/lib/types'
 
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ personal: personal ?? {}, business: business ?? {} })
     }
     const status = await getAccountsStatus()
-    const slot = slotParam ?? status.active
+    const slot = toAccountSlot(slotParam, status.active)
     const creds = await getCredentials(account.accessToken, slot)
     return NextResponse.json(creds ?? {})
   } catch (e: unknown) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
   try {
     const body = await req.json() as Credentials & { slot?: string }
-    const slot = body.slot ?? status.active
+    const slot = toAccountSlot(body.slot, status.active)
     const { slot: _unused, ...creds } = body; void _unused
     const { rootId } = await ensureFolderStructure(account.accessToken)
     await saveCredentials(account.accessToken, rootId, creds as Credentials, slot)

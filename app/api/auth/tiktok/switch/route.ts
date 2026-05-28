@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, AccountSlot } from '@/lib/accounts'
+import { getPersonalAccount, toAccountSlot } from '@/lib/accounts'
 import { getCredentials } from '@/lib/drive'
 
 export async function GET(req: NextRequest) {
-  const slot = (req.nextUrl.searchParams.get('slot') ?? 'personal') as AccountSlot
+  const slot = toAccountSlot(req.nextUrl.searchParams.get('slot'))
   const base = process.env.NEXTAUTH_URL!
 
   // Revoke the existing token so TikTok shows a fresh login screen
