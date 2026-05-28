@@ -71,11 +71,10 @@ async function resolveFromUserPages(token: string, preferredPageId?: string) {
     fields: 'id,name,access_token,instagram_business_account{id,username}',
     access_token: token,
   })
-  if (!accounts.data?.length) return null
+  if (!accounts.data?.length || !preferredPageId) return null
 
   const preferred = accounts.data.find(page => page.id === preferredPageId)
-  const page = preferred ?? accounts.data.find(item => item.instagram_business_account?.id)
-  return page?.instagram_business_account?.id ?? null
+  return preferred?.instagram_business_account?.id ?? null
 }
 
 export async function resolveInstagramCredentials(creds: Credentials): Promise<{

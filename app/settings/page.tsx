@@ -262,7 +262,8 @@ function SettingsContent() {
 
   const acc = accountStatus?.[slot]
   const ttConnectedSlot = !!ttTokens[slot]
-  const connectedCount = [acc, ttConnectedSlot, creds.ig_access_token, creds.groq_api_key, creds.gemini_api_key].filter(Boolean).length
+  const igConnectedSlot = !!creds.ig_access_token && !!creds.ig_account_id
+  const connectedCount = [acc, ttConnectedSlot, igConnectedSlot, creds.groq_api_key, creds.gemini_api_key].filter(Boolean).length
 
   return (
     <div className="anim-up" style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -323,7 +324,7 @@ function SettingsContent() {
       <IntegrationCard
         title="Instagram"
         sub="Reels via Graph API · token + Business account ID"
-        connected={!!creds.ig_access_token}
+        connected={igConnectedSlot}
         icon={<LogoInstagram size={20} />}
         color="oklch(0.70 0.20 340)"
       >
