@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPersonalAccount, getAccountsStatus, toAccountSlot } from '@/lib/accounts'
 import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
 
+function graphUrl(path: string, params: Record<string, string>) {
+  const url = new URL(`https://graph.facebook.com/v21.0/${path}`)
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+  return url.toString()
+}
+
 export async function POST(req: NextRequest) {
   const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
@@ -19,9 +25,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No Instagram token to refresh. Paste one in Settings first.' }, { status: 400 })
   }
 
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(creds.ig_access_token)}`
-  )
+  const res = await fetch(graphUrl('oauth/access_token', {
+    grant_type: 'fb_exchange_token',
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: creds.ig_access_token,
+  }))
   const data = await res.json()
 
   if (data.error) {

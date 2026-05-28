@@ -6,6 +6,12 @@ const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
 
 type InsightMetricMap = Record<string, number>
 
+function graphUrl(path: string, params: Record<string, string>) {
+  const url = new URL(`${GRAPH_BASE}/${path}`)
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+  return url.toString()
+}
+
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
   if (typeof value === 'string') {
@@ -57,8 +63,12 @@ export async function GET() {
 
   try {
     const [mediaRes, accountRes] = await Promise.all([
-      fetch(`${GRAPH_BASE}/${ig_account_id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration&limit=20&access_token=${ig_access_token}`),
-      fetch(`${GRAPH_BASE}/${ig_account_id}?fields=followers_count&access_token=${ig_access_token}`),
+      fetch(graphUrl(`${ig_account_id}/media`, {
+        fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count,video_duration,duration',
+        limit: '20',
+        access_token: ig_access_token,
+      })),
+      fetch(graphUrl(ig_account_id, { fields: 'followers_count', access_token: ig_access_token })),
     ])
     const [mediaData, accountData] = await Promise.all([mediaRes.json(), accountRes.json()])
     const followersCount: number | undefined = toFiniteNumber(accountData.followers_count)
@@ -99,7 +109,7 @@ export async function GET() {
             'ig_reels_video_view_total_time',
           ], ig_access_token),
           (item.video_duration == null && item.duration == null)
-            ? fetch(`${GRAPH_BASE}/${item.id}?fields=video_duration,duration&access_token=${ig_access_token}`)
+            ? fetch(graphUrl(item.id, { fields: 'video_duration,duration', access_token: ig_access_token }))
             : Promise.resolve(null),
         ])
 

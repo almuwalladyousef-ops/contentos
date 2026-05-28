@@ -7,6 +7,18 @@ const SUBFOLDERS = ['analysis', 'transcripts', 'temp']
 type FolderCache = { rootId: string; analysisId: string; transcriptsId: string; tempId: string }
 const folderCache = new Map<string, FolderCache>()
 
+function normalizeCredentials(creds: Credentials): Credentials {
+  return {
+    ...creds,
+    ig_access_token: creds.ig_access_token?.trim(),
+    ig_account_id: creds.ig_account_id?.trim(),
+    tt_access_token: creds.tt_access_token?.trim(),
+    tt_refresh_token: creds.tt_refresh_token?.trim(),
+    groq_api_key: creds.groq_api_key?.trim(),
+    gemini_api_key: creds.gemini_api_key?.trim(),
+  }
+}
+
 export function getDriveClient(accessToken: string) {
   const auth = new google.auth.OAuth2()
   auth.setCredentials({ access_token: accessToken })
@@ -198,9 +210,9 @@ export async function getCredentials(accessToken: string, slot = 'personal'): Pr
   if (!search.data.files?.length) return null
   const fileId = search.data.files[0].id!
   const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' })
-  return JSON.parse(res.data as string) as Credentials
+  return normalizeCredentials(JSON.parse(res.data as string) as Credentials)
 }
 
 export async function saveCredentials(accessToken: string, rootFolderId: string, creds: Credentials, slot = 'personal'): Promise<void> {
-  await writeJsonFile(accessToken, rootFolderId, `credentials-${slot}.json`, creds)
+  await writeJsonFile(accessToken, rootFolderId, `credentials-${slot}.json`, normalizeCredentials(creds))
 }

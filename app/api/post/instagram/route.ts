@@ -6,6 +6,12 @@ export const maxDuration = 120
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+function graphUrl(path: string, params: Record<string, string>) {
+  const url = new URL(`https://graph.facebook.com/v21.0/${path}`)
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+  return url.toString()
+}
+
 export async function POST(req: NextRequest) {
   const [account, accountsStatus] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
@@ -20,7 +26,6 @@ export async function POST(req: NextRequest) {
     if (!videoUrl) return NextResponse.json({ error: 'No video URL provided' }, { status: 400 })
 
     const { ig_access_token, ig_account_id } = creds
-    const base = `https://graph.facebook.com/v21.0`
 
     // Step 1: Create media container
     const containerParams = new URLSearchParams({
@@ -29,7 +34,7 @@ export async function POST(req: NextRequest) {
       caption: caption || '',
       access_token: ig_access_token,
     })
-    const containerRes = await fetch(`${base}/${ig_account_id}/media`, {
+    const containerRes = await fetch(graphUrl(`${ig_account_id}/media`, {}), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: containerParams,
@@ -46,7 +51,7 @@ export async function POST(req: NextRequest) {
     while (attempts < 40) {
       await sleep(3000)
       const statusRes = await fetch(
-        `${base}/${creationId}?fields=status_code&access_token=${ig_access_token}`
+        graphUrl(creationId, { fields: 'status_code', access_token: ig_access_token })
       )
       const statusData = await statusRes.json()
       if (statusData.status_code === 'FINISHED') break
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest) {
       creation_id: creationId,
       access_token: ig_access_token,
     })
-    const publishRes = await fetch(`${base}/${ig_account_id}/media_publish`, {
+    const publishRes = await fetch(graphUrl(`${ig_account_id}/media_publish`, {}), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: publishParams,
