@@ -14,6 +14,14 @@ function hasInstagramCredentials(creds: Credentials | null) {
   return !!creds?.ig_access_token || !!creds?.ig_account_id
 }
 
+function mergeInstagramCredentials(target: Credentials | null, source: Credentials): Credentials {
+  return {
+    ...(target ?? {}),
+    ig_access_token: target?.ig_access_token ?? source.ig_access_token,
+    ig_account_id: target?.ig_account_id ?? source.ig_account_id,
+  }
+}
+
 export async function GET(req: NextRequest) {
   const account = await getPersonalAccount()
   if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
@@ -25,8 +33,12 @@ export async function GET(req: NextRequest) {
         getCredentials(account.accessToken, 'business'),
       ])
       if (hasInstagramCredentials(personal)) {
-        personal = stripInstagramCredentials(personal!)
         const { rootId } = await ensureFolderStructure(account.accessToken)
+        if (!hasInstagramCredentials(business)) {
+          business = mergeInstagramCredentials(business, personal!)
+          await saveCredentials(account.accessToken, rootId, business, 'business')
+        }
+        personal = stripInstagramCredentials(personal!)
         await saveCredentials(account.accessToken, rootId, personal, 'personal')
       }
       return NextResponse.json({ personal: personal ?? {}, business: business ?? {} })
@@ -35,8 +47,12 @@ export async function GET(req: NextRequest) {
     const slot = toAccountSlot(slotParam, status.active)
     let creds = await getCredentials(account.accessToken, slot)
     if (slot === 'personal' && hasInstagramCredentials(creds)) {
-      creds = stripInstagramCredentials(creds!)
       const { rootId } = await ensureFolderStructure(account.accessToken)
+      const business = await getCredentials(account.accessToken, 'business')
+      if (!hasInstagramCredentials(business)) {
+        await saveCredentials(account.accessToken, rootId, mergeInstagramCredentials(business, creds!), 'business')
+      }
+      creds = stripInstagramCredentials(creds!)
       await saveCredentials(account.accessToken, rootId, creds, slot)
     }
     return NextResponse.json(creds ?? {})
