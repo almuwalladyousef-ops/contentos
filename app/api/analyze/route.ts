@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount } from '@/lib/accounts'
 import { analyzeTranscript } from '@/lib/gemini'
-import { getCredentials } from '@/lib/drive'
 
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
-  const account = await getPersonalAccount()
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return NextResponse.json({ error: 'Analysis not configured (set GEMINI_API_KEY).' }, { status: 400 })
 
   try {
-    const creds = await getCredentials(account.accessToken)
-    if (!creds?.gemini_api_key) return NextResponse.json({ error: 'Gemini API key not set in Settings' }, { status: 400 })
-
     const { transcript } = await req.json()
     if (!transcript) return NextResponse.json({ error: 'No transcript provided' }, { status: 400 })
 
-    const analysis = await analyzeTranscript(transcript, creds.gemini_api_key)
+    const analysis = await analyzeTranscript(transcript, apiKey)
     return NextResponse.json({ analysis })
   } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

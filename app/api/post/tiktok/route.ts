@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { ensureFolderStructure, getTikTokToken } from '@/lib/drive'
+import { getTikTokConnection } from '@/lib/connections'
 
 export const maxDuration = 300
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 export async function POST(req: NextRequest) {
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+  const connection = await getTikTokConnection()
+  if (!connection) {
+    return NextResponse.json({ error: 'TikTok not connected. Connect it in Settings.' }, { status: 400 })
+  }
+  const tt_access_token = connection.accessToken
 
   try {
-    const { rootId } = await ensureFolderStructure(account.accessToken)
-    const tt_access_token = await getTikTokToken(account.accessToken, rootId, status.active)
-    if (!tt_access_token) {
-      return NextResponse.json({ error: 'TikTok access token not set in Settings' }, { status: 400 })
-    }
-
     const { blobUrl, caption, privacy, size } = await req.json()
     if (!blobUrl) return NextResponse.json({ error: 'No blob URL provided' }, { status: 400 })
 

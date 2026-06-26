@@ -1,58 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, toAccountSlot } from '@/lib/accounts'
-import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
+import { saveInstagramConnection } from '@/lib/connections'
 import {
   exchangeFacebookCodeForToken,
   exchangeForLongLivedToken,
   findInstagramAccountConnection,
   getInstagramAppCredentials,
 } from '@/lib/instagram'
+import { getBaseUrl } from '@/lib/oauth'
 
 export async function GET(req: NextRequest) {
+  const base = getBaseUrl(req)
   const code = req.nextUrl.searchParams.get('code')
   const error = req.nextUrl.searchParams.get('error') ?? req.nextUrl.searchParams.get('error_message')
-  const slot = toAccountSlot(req.nextUrl.searchParams.get('state'))
-  const base = process.env.NEXTAUTH_URL!
 
   if (error || !code) {
-    return NextResponse.redirect(`${base}/settings?ig_error=${encodeURIComponent(error ?? 'no_code')}`)
+    return NextResponse.redirect(new URL(`/settings?ig_error=${encodeURIComponent(error ?? 'no_code')}`, req.url))
   }
 
-  const account = await getPersonalAccount()
-  if (!account) {
-    return NextResponse.redirect(`${base}/settings?ig_error=no_google_account`)
-  }
-
-  const { appId, appSecret, envSlot } = getInstagramAppCredentials(slot)
+  const { appId, appSecret } = getInstagramAppCredentials()
   if (!appId || !appSecret) {
-    return NextResponse.redirect(`${base}/settings?ig_error=${encodeURIComponent(`FACEBOOK_APP_ID_${envSlot} and FACEBOOK_APP_SECRET_${envSlot} must be set.`)}`)
+    return NextResponse.redirect(
+      new URL(`/settings?ig_error=${encodeURIComponent('Instagram app not configured. Set FACEBOOK_APP_ID / FACEBOOK_APP_SECRET.')}`, req.url)
+    )
   }
 
   const redirectUri = `${base}/api/auth/instagram/callback`
   const shortToken = await exchangeFacebookCodeForToken({ code, redirectUri, appId, appSecret })
   if (!shortToken.access_token) {
-    return NextResponse.redirect(`${base}/settings?ig_error=${encodeURIComponent(shortToken.error?.message ?? 'token_exchange_failed')}`)
+    return NextResponse.redirect(new URL(`/settings?ig_error=${encodeURIComponent(shortToken.error?.message ?? 'token_exchange_failed')}`, req.url))
   }
 
-  const longToken = await exchangeForLongLivedToken({
-    accessToken: shortToken.access_token,
-    appId,
-    appSecret,
-  })
+  const longToken = await exchangeForLongLivedToken({ accessToken: shortToken.access_token, appId, appSecret })
   const accessToken = longToken.access_token ?? shortToken.access_token
 
   const connection = await findInstagramAccountConnection(accessToken)
   if (!connection) {
-    return NextResponse.redirect(`${base}/settings?ig_error=${encodeURIComponent('No connected Instagram Business or Creator account found. Make sure your Instagram account is connected to a Facebook Page you manage.')}`)
+    return NextResponse.redirect(
+      new URL(`/settings?ig_error=${encodeURIComponent('No Instagram Business or Creator account found. Connect your Instagram account to a Facebook Page you manage, then try again.')}`, req.url)
+    )
   }
 
-  const { rootId } = await ensureFolderStructure(account.accessToken)
-  const existing = await getCredentials(account.accessToken, slot) ?? {}
-  await saveCredentials(account.accessToken, rootId, {
-    ...existing,
-    ig_access_token: connection.accessToken,
-    ig_account_id: connection.accountId,
-  }, slot)
+  await saveInstagramConnection({
+    access_token: connection.accessToken,
+    account_id: connection.accountId,
+    username: connection.username,
+  })
 
-  return NextResponse.redirect(`${base}/settings?ig_connected=1&slot=${slot}`)
+  return NextResponse.redirect(new URL('/settings?ig_connected=1', req.url))
 }

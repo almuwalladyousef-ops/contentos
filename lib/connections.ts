@@ -1,0 +1,248 @@
+import { cookies } from 'next/headers'
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
+
+/**
+ * Unified connection store for ContentOS.
+ *
+ * Every platform the user authorizes (YouTube/Google, Instagram, TikTok) is
+ * stored in its own encrypted, http-only cookie. There is exactly ONE account
+ * per platform — connecting is a single OAuth click, with nothing to paste.
+ *
+ * Tokens are NEVER stored in Google Drive and the platforms do not depend on
+ * each other: you can connect Instagram or TikTok without connecting Google.
+ */
+
+// ── crypto ──────────────────────────────────────────────────────────────────
+
+function getKey(): Buffer {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET is not set. Generate one with: openssl rand -base64 32')
+  }
+  const buf = Buffer.from(secret, 'base64')
+  return buf.length >= 32 ? buf.subarray(0, 32) : Buffer.concat([buf, Buffer.alloc(32 - buf.length)])
+}
+
+function encrypt(text: string): string {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', getKey(), iv)
+  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`
+}
+
+function decrypt(text: string): string {
+  const [ivHex, tagHex, encHex] = text.split(':')
+  const decipher = createDecipheriv('aes-256-gcm', getKey(), Buffer.from(ivHex, 'hex'))
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
+  return decipher.update(Buffer.from(encHex, 'hex')).toString('utf8') + decipher.final('utf8')
+}
+
+export const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 24 * 365,
+  path: '/',
+}
+
+async function readCookie<T>(name: string): Promise<T | null> {
+  const jar = await cookies()
+  const val = jar.get(name)?.value
+  if (!val) return null
+  try {
+    return JSON.parse(decrypt(val)) as T
+  } catch {
+    return null
+  }
+}
+
+async function writeCookie(name: string, value: unknown): Promise<void> {
+  const jar = await cookies()
+  jar.set(name, encrypt(JSON.stringify(value)), COOKIE_OPTS)
+}
+
+async function clearCookie(name: string): Promise<void> {
+  const jar = await cookies()
+  jar.set(name, '', { ...COOKIE_OPTS, maxAge: 0 })
+}
+
+const now = () => Math.floor(Date.now() / 1000)
+
+// ── Google (YouTube · Drive · Gmail) ────────────────────────────────────────
+
+const GOOGLE_COOKIE = 'cms_google'
+
+export interface GoogleAccount {
+  email: string
+  access_token: string
+  refresh_token: string
+  expires_at: number // unix seconds
+}
+
+export async function saveGoogleAccount(acc: GoogleAccount): Promise<void> {
+  await writeCookie(GOOGLE_COOKIE, acc)
+}
+
+export async function clearGoogleAccount(): Promise<void> {
+  await clearCookie(GOOGLE_COOKIE)
+}
+
+async function refreshGoogleToken(acc: GoogleAccount): Promise<GoogleAccount> {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: acc.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const json = await res.json()
+  if (!json.access_token) throw new Error(`Google token refresh failed: ${JSON.stringify(json)}`)
+  return {
+    ...acc,
+    access_token: json.access_token,
+    expires_at: now() + (json.expires_in ?? 3600),
+  }
+}
+
+/** Returns a valid Google access token (refreshing if near expiry) or null. */
+export async function getGoogleAccount(): Promise<{ accessToken: string; email: string } | null> {
+  const acc = await readCookie<GoogleAccount>(GOOGLE_COOKIE)
+  if (!acc?.access_token) return null
+  try {
+    if (acc.refresh_token && acc.expires_at - now() < 300) {
+      const refreshed = await refreshGoogleToken(acc)
+      await saveGoogleAccount(refreshed)
+      return { accessToken: refreshed.access_token, email: refreshed.email }
+    }
+    return { accessToken: acc.access_token, email: acc.email }
+  } catch {
+    // Refresh failed — fall back to the existing token; the caller surfaces any API error.
+    return { accessToken: acc.access_token, email: acc.email }
+  }
+}
+
+// ── Instagram (Graph API) ───────────────────────────────────────────────────
+
+const INSTAGRAM_COOKIE = 'cms_instagram'
+
+export interface InstagramConnection {
+  access_token: string
+  account_id: string
+  username?: string
+}
+
+export async function saveInstagramConnection(conn: InstagramConnection): Promise<void> {
+  await writeCookie(INSTAGRAM_COOKIE, conn)
+}
+
+export async function clearInstagramConnection(): Promise<void> {
+  await clearCookie(INSTAGRAM_COOKIE)
+}
+
+export async function getInstagramConnection(): Promise<{
+  accessToken: string
+  accountId: string
+  username?: string
+} | null> {
+  const conn = await readCookie<InstagramConnection>(INSTAGRAM_COOKIE)
+  if (!conn?.access_token || !conn?.account_id) return null
+  return { accessToken: conn.access_token, accountId: conn.account_id, username: conn.username }
+}
+
+// ── TikTok (Content Posting API) ────────────────────────────────────────────
+
+const TIKTOK_COOKIE = 'cms_tiktok'
+
+export interface TikTokConnection {
+  access_token: string
+  refresh_token?: string
+  expires_at?: number // unix ms
+  display_name?: string
+}
+
+export async function saveTikTokConnection(conn: TikTokConnection): Promise<void> {
+  await writeCookie(TIKTOK_COOKIE, conn)
+}
+
+export async function clearTikTokConnection(): Promise<void> {
+  await clearCookie(TIKTOK_COOKIE)
+}
+
+async function refreshTikTokToken(conn: TikTokConnection): Promise<TikTokConnection | null> {
+  if (!conn.refresh_token) return null
+  try {
+    const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: process.env.TIKTOK_CLIENT_KEY!,
+        client_secret: process.env.TIKTOK_CLIENT_SECRET!,
+        grant_type: 'refresh_token',
+        refresh_token: conn.refresh_token,
+      }),
+    })
+    const data = await res.json()
+    const access = data.access_token ?? data.data?.access_token
+    if (!access) return null
+    return {
+      access_token: access,
+      refresh_token: data.refresh_token ?? data.data?.refresh_token ?? conn.refresh_token,
+      expires_at: Date.now() + (data.expires_in ?? data.data?.expires_in ?? 86400) * 1000,
+      display_name: conn.display_name,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function getTikTokConnection(): Promise<{
+  accessToken: string
+  displayName?: string
+} | null> {
+  const conn = await readCookie<TikTokConnection>(TIKTOK_COOKIE)
+  if (!conn?.access_token) return null
+
+  const expiresAt = conn.expires_at ?? 0
+  const isExpired = expiresAt > 0 && Date.now() > expiresAt - 60_000 // refresh 1 min early
+  if (isExpired && conn.refresh_token) {
+    const refreshed = await refreshTikTokToken(conn)
+    if (refreshed) {
+      await saveTikTokConnection(refreshed)
+      return { accessToken: refreshed.access_token, displayName: refreshed.display_name }
+    }
+  }
+  return { accessToken: conn.access_token, displayName: conn.display_name }
+}
+
+// ── Aggregate status (for Settings / shell) ─────────────────────────────────
+
+export async function getConnectionsStatus(): Promise<{
+  youtube: { email: string } | null
+  instagram: { username: string | null } | null
+  tiktok: { displayName: string | null } | null
+}> {
+  const jar = await cookies()
+  const read = <T>(name: string): T | null => {
+    const val = jar.get(name)?.value
+    if (!val) return null
+    try {
+      return JSON.parse(decrypt(val)) as T
+    } catch {
+      return null
+    }
+  }
+
+  const google = read<GoogleAccount>(GOOGLE_COOKIE)
+  const ig = read<InstagramConnection>(INSTAGRAM_COOKIE)
+  const tt = read<TikTokConnection>(TIKTOK_COOKIE)
+
+  return {
+    youtube: google?.email ? { email: google.email } : null,
+    instagram: ig?.access_token && ig?.account_id ? { username: ig.username ?? null } : null,
+    tiktok: tt?.access_token ? { displayName: tt.display_name ?? null } : null,
+  }
+}

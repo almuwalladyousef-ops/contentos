@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { COOKIE_OPTS } from '@/lib/accounts'
+import { clearGoogleAccount, clearInstagramConnection, clearTikTokConnection } from '@/lib/connections'
 
 export async function POST(req: NextRequest) {
-  const { slot } = await req.json()
-  if (slot !== 'personal' && slot !== 'business') {
-    return NextResponse.json({ error: 'Invalid slot' }, { status: 400 })
-  }
+  const { platform } = await req.json()
 
-  const jar = await cookies()
-  // Delete the account cookie for this slot
-  jar.set(`cms_${slot}`, '', { ...COOKIE_OPTS, maxAge: 0 })
-
-  // If this was the active slot, clear the active pointer too
-  const active = jar.get('cms_active')?.value
-  if (active === slot) {
-    jar.set('cms_active', '', { ...COOKIE_OPTS, maxAge: 0 })
+  switch (platform) {
+    case 'youtube':
+    case 'google':
+      await clearGoogleAccount()
+      break
+    case 'instagram':
+      await clearInstagramConnection()
+      break
+    case 'tiktok':
+      await clearTikTokConnection()
+      break
+    default:
+      return NextResponse.json({ error: 'Invalid platform' }, { status: 400 })
   }
 
   return NextResponse.json({ ok: true })

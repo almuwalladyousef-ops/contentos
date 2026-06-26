@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { ensureFolderStructure, getCredentials, saveCredentials } from '@/lib/drive'
-import { instagramGraphErrorMessage, instagramGraphUrl, resolveInstagramCredentials } from '@/lib/instagram'
+import { getInstagramConnection, saveInstagramConnection } from '@/lib/connections'
+import { instagramGraphErrorMessage, instagramGraphUrl, resolveInstagramAccountId } from '@/lib/instagram'
 
 type InsightMetricMap = Record<string, number>
 
@@ -43,29 +42,22 @@ async function fetchInsightMetrics(mediaId: string, metrics: string[], token: st
 }
 
 export async function GET() {
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
-
-  let creds = await getCredentials(account.accessToken, status.active)
-  if (!creds?.ig_access_token || !creds?.ig_account_id) {
-    return NextResponse.json({ error: 'Instagram not connected. Add credentials in Settings.' }, { status: 400 })
+  const connection = await getInstagramConnection()
+  if (!connection) {
+    return NextResponse.json({ error: 'Instagram not connected. Connect it in Settings.' }, { status: 400 })
   }
-  const resolved = await resolveInstagramCredentials(creds)
+
+  const ig_access_token = connection.accessToken
+  const resolved = await resolveInstagramAccountId(ig_access_token, connection.accountId)
   if (resolved.mediaError) {
     return NextResponse.json({
-      error: instagramGraphErrorMessage('Instagram account ID is not a usable Business/Creator account ID. Reconnect Instagram in Settings so ContentOS can fetch the correct account ID.', resolved.mediaError),
+      error: instagramGraphErrorMessage('Instagram account is not a usable Business/Creator account. Reconnect Instagram in Settings.', resolved.mediaError),
     }, { status: 400 })
   }
-  creds = resolved.creds
+  const ig_account_id = resolved.accountId
   if (resolved.changed) {
-    const { rootId } = await ensureFolderStructure(account.accessToken)
-    await saveCredentials(account.accessToken, rootId, creds, status.active)
+    await saveInstagramConnection({ access_token: ig_access_token, account_id: ig_account_id, username: connection.username })
   }
-  if (!creds.ig_access_token || !creds.ig_account_id) {
-    return NextResponse.json({ error: 'Instagram not connected. Add credentials in Settings.' }, { status: 400 })
-  }
-
-  const { ig_access_token, ig_account_id } = creds
 
   try {
     const [mediaRes, accountRes] = await Promise.all([

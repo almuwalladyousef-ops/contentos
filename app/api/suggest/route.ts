@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
-  const account = await getPersonalAccount()
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return NextResponse.json({ error: 'Suggestions not configured (set GEMINI_API_KEY).' }, { status: 400 })
 
   try {
-    const creds = await getCredentials(account.accessToken)
-    if (!creds?.gemini_api_key) return NextResponse.json({ error: 'Gemini API key not set in Settings' }, { status: 400 })
-
     const { type, context } = await req.json()
     if (!type) return NextResponse.json({ error: 'Missing type' }, { status: 400 })
 
-    const genAI = new GoogleGenerativeAI(creds.gemini_api_key)
+    const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     if (type === 'captions') {

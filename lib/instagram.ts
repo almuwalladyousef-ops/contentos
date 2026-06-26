@@ -1,5 +1,3 @@
-import { Credentials } from './types'
-
 export const INSTAGRAM_GRAPH_BASE = 'https://graph.facebook.com/v21.0'
 
 type GraphError = {
@@ -65,11 +63,10 @@ async function fetchGraph<T>(path: string, params: Record<string, string>): Prom
   return await res.json() as GraphResponse<T>
 }
 
-export function getInstagramAppCredentials(slot: 'personal' | 'business') {
-  const envSlot = slot.toUpperCase()
-  const appId = process.env[`FACEBOOK_APP_ID_${envSlot}`] ?? process.env.FACEBOOK_APP_ID
-  const appSecret = process.env[`FACEBOOK_APP_SECRET_${envSlot}`] ?? process.env.FACEBOOK_APP_SECRET
-  return { appId, appSecret, envSlot }
+export function getInstagramAppCredentials() {
+  const appId = process.env.FACEBOOK_APP_ID
+  const appSecret = process.env.FACEBOOK_APP_SECRET
+  return { appId, appSecret }
 }
 
 export async function exchangeFacebookCodeForToken(params: {
@@ -170,39 +167,41 @@ async function resolveSingleConnectedInstagramAccount(token: string) {
   return connected[0].instagram_business_account?.id ?? null
 }
 
-export async function resolveInstagramCredentials(creds: Credentials): Promise<{
-  creds: Credentials
+/**
+ * Verifies the saved Instagram account ID can read its media; if not, tries to
+ * resolve the correct Business/Creator account ID from the access token. Returns
+ * the (possibly corrected) account ID and whether it changed.
+ */
+export async function resolveInstagramAccountId(accessToken: string, savedAccountId: string): Promise<{
+  accountId: string
   changed: boolean
   mediaError?: GraphError
 }> {
-  const token = creds.ig_access_token?.trim()
-  const savedAccountId = creds.ig_account_id?.trim()
-  if (!token || !savedAccountId) return { creds, changed: false }
+  const token = accessToken?.trim()
+  const saved = savedAccountId?.trim()
+  if (!token || !saved) return { accountId: saved, changed: false }
 
-  const probe = await canReadMedia(savedAccountId, token)
-  if (probe.ok) return { creds: { ...creds, ig_access_token: token, ig_account_id: savedAccountId }, changed: false }
+  const probe = await canReadMedia(saved, token)
+  if (probe.ok) return { accountId: saved, changed: false }
 
   let resolvedId: string | null = null
   if (isMissingMediaEdge(probe.error)) {
-    resolvedId = await resolveFromPage(savedAccountId, token) ?? null
+    resolvedId = await resolveFromPage(saved, token) ?? null
     resolvedId ??= await resolveFromTokenPage(token) ?? null
-    resolvedId ??= await resolveFromUserPages(token, savedAccountId)
+    resolvedId ??= await resolveFromUserPages(token, saved)
     resolvedId ??= await resolveSingleConnectedInstagramAccount(token)
   }
 
-  if (!resolvedId || resolvedId === savedAccountId) {
-    return { creds: { ...creds, ig_access_token: token, ig_account_id: savedAccountId }, changed: false, mediaError: probe.error }
+  if (!resolvedId || resolvedId === saved) {
+    return { accountId: saved, changed: false, mediaError: probe.error }
   }
 
   const resolvedProbe = await canReadMedia(resolvedId, token)
   if (!resolvedProbe.ok) {
-    return { creds: { ...creds, ig_access_token: token, ig_account_id: savedAccountId }, changed: false, mediaError: resolvedProbe.error }
+    return { accountId: saved, changed: false, mediaError: resolvedProbe.error }
   }
 
-  return {
-    creds: { ...creds, ig_access_token: token, ig_account_id: resolvedId },
-    changed: true,
-  }
+  return { accountId: resolvedId, changed: true }
 }
 
 export function instagramGraphErrorMessage(prefix: string, error?: GraphError) {

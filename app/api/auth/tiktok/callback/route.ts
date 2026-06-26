@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, toAccountSlot } from '@/lib/accounts'
-import { getCredentials, saveCredentials, ensureFolderStructure } from '@/lib/drive'
+import { saveTikTokConnection } from '@/lib/connections'
+import { getBaseUrl } from '@/lib/oauth'
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const code = searchParams.get('code')
-  const error = searchParams.get('error')
-  const slot = toAccountSlot(searchParams.get('state'))
-  const base = process.env.NEXTAUTH_URL!
+  const base = getBaseUrl(req)
+  const code = req.nextUrl.searchParams.get('code')
+  const error = req.nextUrl.searchParams.get('error')
 
   if (error || !code) {
-    return NextResponse.redirect(`${base}/settings?tt_error=${error ?? 'no_code'}`)
-  }
-
-  const account = await getPersonalAccount()
-  if (!account) {
-    return NextResponse.redirect(`${base}/settings?tt_error=no_account`)
+    return NextResponse.redirect(new URL(`/settings?tt_error=${encodeURIComponent(error ?? 'no_code')}`, req.url))
   }
 
   const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
@@ -36,28 +29,25 @@ export async function GET(req: NextRequest) {
   const expiresIn = tokenData.expires_in ?? tokenData.data?.expires_in ?? 86400
 
   if (!accessToken) {
-    const errMsg = encodeURIComponent(JSON.stringify(tokenData))
+    const errMsg = encodeURIComponent(tokenData.error_description ?? tokenData.error ?? JSON.stringify(tokenData))
     return NextResponse.redirect(`${base}/settings?tt_error=${errMsg}`)
   }
 
-  let tt_display_name = ''
+  let display_name = ''
   try {
     const userRes = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=display_name', {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
     const userData = await userRes.json()
-    tt_display_name = userData.data?.user?.display_name ?? ''
+    display_name = userData.data?.user?.display_name ?? ''
   } catch { /* non-fatal */ }
 
-  const { rootId } = await ensureFolderStructure(account.accessToken)
-  const existing = await getCredentials(account.accessToken, slot) ?? {}
-  await saveCredentials(account.accessToken, rootId, {
-    ...existing,
-    tt_access_token: accessToken,
-    tt_refresh_token: refreshToken ?? existing.tt_refresh_token,
-    tt_expires_at: Date.now() + expiresIn * 1000,
-    tt_display_name,
-  }, slot)
+  await saveTikTokConnection({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: Date.now() + expiresIn * 1000,
+    display_name,
+  })
 
-  return NextResponse.redirect(`${base}/settings?tt_connected=1&slot=${slot}`)
+  return NextResponse.redirect(new URL('/settings?tt_connected=1', req.url))
 }

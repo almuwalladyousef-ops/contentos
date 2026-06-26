@@ -1,21 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials, ensureFolderStructure, getTikTokToken } from '@/lib/drive'
+import { getTikTokConnection } from '@/lib/connections'
 
 export async function GET() {
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
-
-  const creds = await getCredentials(account.accessToken, status.active)
-  if (!creds?.tt_access_token) {
-    return NextResponse.json({ error: 'TikTok not connected. Add credentials in Settings.' }, { status: 400 })
+  const connection = await getTikTokConnection()
+  if (!connection) {
+    return NextResponse.json({ error: 'TikTok not connected. Connect it in Settings.' }, { status: 400 })
   }
-
-  const { rootId } = await ensureFolderStructure(account.accessToken)
-  const token = await getTikTokToken(account.accessToken, rootId, status.active)
-  if (!token) {
-    return NextResponse.json({ error: 'TikTok token unavailable. Reconnect in Settings.' }, { status: 400 })
-  }
+  const token = connection.accessToken
 
   try {
     const res = await fetch('https://open.tiktokapis.com/v2/video/list/?fields=id,title,video_description,create_time,cover_image_url,share_url,duration,like_count,comment_count,share_count,view_count', {

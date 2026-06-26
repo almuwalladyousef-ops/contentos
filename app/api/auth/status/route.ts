@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getAccountsStatus } from '@/lib/accounts'
+import { getConnectionsStatus } from '@/lib/connections'
 
 export async function GET() {
-  return NextResponse.json(await getAccountsStatus())
+  return NextResponse.json(await getConnectionsStatus())
 }

@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPersonalAccount, getAccountsStatus } from '@/lib/accounts'
-import { getCredentials } from '@/lib/drive'
+import { getTikTokConnection } from '@/lib/connections'
 
 export async function POST(req: NextRequest) {
-  const [account, status] = await Promise.all([getPersonalAccount(), getAccountsStatus()])
-  if (!account) return NextResponse.json({ error: 'No account connected' }, { status: 401 })
+  const connection = await getTikTokConnection()
+  if (!connection) {
+    return NextResponse.json({ error: 'TikTok not connected. Connect it in Settings.' }, { status: 400 })
+  }
 
   try {
-    const creds = await getCredentials(account.accessToken, status.active)
-    if (!creds?.tt_access_token) {
-      return NextResponse.json({ error: 'TikTok access token not set in Settings' }, { status: 400 })
-    }
-
     const { caption, privacy, size } = await req.json()
 
     const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${creds.tt_access_token}`,
+        Authorization: `Bearer ${connection.accessToken}`,
         'Content-Type': 'application/json; charset=UTF-8',
       },
       body: JSON.stringify({

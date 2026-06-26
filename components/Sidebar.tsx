@@ -10,20 +10,13 @@ import {
   IconCommand,
 } from './Icons'
 
-type AccountSlot = 'personal' | 'business'
-interface AccountStatus {
-  active: AccountSlot
-  personal: { email: string } | null
-  business: { email: string } | null
-}
-
 interface SidebarProps {
   navOpen: boolean
   isMobile: boolean
   onToggle: () => void
   pathname: string
-  account: AccountStatus | null
-  onSwitchSlot: (slot: AccountSlot) => void
+  connectedCount: number
+  email: string | null
 }
 
 const NAV_ITEMS = [
@@ -33,12 +26,8 @@ const NAV_ITEMS = [
   { href: '/settings', label: 'Settings', Icon: IconSettings, shortcut: '⌘,' },
 ]
 
-export default function Sidebar({ navOpen, isMobile, onToggle, pathname, account, onSwitchSlot }: SidebarProps) {
-  const slot = account?.active ?? 'personal'
-  const acc = account ? account[slot] : null
-  const initials = acc?.email
-    ? acc.email.slice(0, 2).toUpperCase()
-    : 'YO'
+export default function Sidebar({ navOpen, isMobile, onToggle, pathname, connectedCount, email }: SidebarProps) {
+  const initials = email ? email.slice(0, 2).toUpperCase() : 'YO'
 
   return (
     <aside
@@ -183,75 +172,46 @@ export default function Sidebar({ navOpen, isMobile, onToggle, pathname, account
         </div>
 
 
-        {/* Account switcher */}
-        <div style={{
-          padding: 8,
-          borderRadius: 10,
-          background: 'var(--bg-2)',
-          border: '1px solid var(--hairline)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
-            <div style={{
-              width: 30, height: 30,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, var(--accent), oklch(0.62 0.16 280))',
-              display: 'grid', placeItems: 'center',
-              fontSize: 11, fontWeight: 600,
-              color: 'oklch(0.18 0.013 255)',
-              flexShrink: 0,
-            }}>
-              {initials}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 12,
-                fontWeight: 500,
-                lineHeight: 1.2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {acc?.email ?? 'Not connected'}
-              </div>
-              <div
-                className="mono"
-                style={{ fontSize: 9.5, color: 'var(--text-mute)', marginTop: 2 }}
-              >
-                {slot}
-              </div>
-            </div>
-          </div>
-
-          {/* Personal / Business pills */}
-          <div style={{
-            display: 'flex',
-            padding: 2,
-            borderRadius: 7,
-            background: 'var(--surface)',
+        {/* Connections summary */}
+        <Link
+          href="/settings"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 9,
+            padding: 8,
+            borderRadius: 10,
+            background: 'var(--bg-2)',
             border: '1px solid var(--hairline)',
+            textDecoration: 'none',
+            color: 'inherit',
+          }}
+        >
+          <div style={{
+            width: 30, height: 30,
+            borderRadius: 8,
+            background: 'linear-gradient(135deg, var(--accent), oklch(0.62 0.16 280))',
+            display: 'grid', placeItems: 'center',
+            fontSize: 11, fontWeight: 600,
+            color: 'oklch(0.18 0.013 255)',
+            flexShrink: 0,
           }}>
-            {(['personal', 'business'] as AccountSlot[]).map(s => (
-              <button
-                key={s}
-                onClick={() => onSwitchSlot(s)}
-                style={{
-                  flex: 1,
-                  padding: '4px 0',
-                  borderRadius: 5,
-                  fontSize: 10.5,
-                  textTransform: 'capitalize',
-                  color: slot === s ? 'var(--text)' : 'var(--text-mute)',
-                  background: slot === s ? 'var(--surface-3)' : 'transparent',
-                  fontWeight: slot === s ? 600 : 400,
-                  transition: 'all 120ms ease',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                {s}
-              </button>
-            ))}
+            {initials}
           </div>
-        </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 12,
+              fontWeight: 500,
+              lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {email ?? 'Manage connections'}
+            </div>
+            <div className="mono" style={{ fontSize: 9.5, color: 'var(--text-mute)', marginTop: 2 }}>
+              {connectedCount}/3 connected
+            </div>
+          </div>
+        </Link>
       </div>
     </aside>
   )

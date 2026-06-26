@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { toAccountSlot } from '@/lib/accounts'
+import { getBaseUrl } from '@/lib/oauth'
 
 export async function GET(req: NextRequest) {
-  const slot = toAccountSlot(req.nextUrl.searchParams.get('slot'))
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/tiktok/callback`
+  if (!process.env.TIKTOK_CLIENT_KEY) {
+    return NextResponse.redirect(
+      new URL(`/settings?tt_error=${encodeURIComponent('TikTok app not configured. Set TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET.')}`, req.url)
+    )
+  }
 
+  const redirectUri = `${getBaseUrl(req)}/api/auth/tiktok/callback`
   const params = new URLSearchParams({
-    client_key: process.env.TIKTOK_CLIENT_KEY!,
+    client_key: process.env.TIKTOK_CLIENT_KEY,
     scope: 'video.publish,video.upload,video.list,user.info.basic',
     response_type: 'code',
     redirect_uri: redirectUri,
-    state: slot,
+    // Always show the account chooser so reconnecting can switch accounts.
     force_login: 'true',
   })
 

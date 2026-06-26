@@ -1,21 +1,20 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 import { IconSidebar } from './Icons'
 
-type AccountSlot = 'personal' | 'business'
-interface AccountStatus {
-  active: AccountSlot
-  personal: { email: string } | null
-  business: { email: string } | null
+interface ConnectionsStatus {
+  youtube: { email: string } | null
+  instagram: { username: string | null } | null
+  tiktok: { displayName: string | null } | null
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const [account, setAccount] = useState<AccountStatus | null>(null)
+  const [status, setStatus] = useState<ConnectionsStatus | null>(null)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -33,18 +32,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch('/api/auth/status')
       .then(r => r.json())
-      .then(setAccount)
+      .then(setStatus)
       .catch(() => {})
-  }, [])
-
-  const switchSlot = useCallback(async (slot: AccountSlot) => {
-    await fetch('/api/auth/switch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot }),
-    }).catch(() => {})
-    // Full reload so all client useEffect data fetches re-run with the new account cookie
-    window.location.reload()
   }, [])
 
   useEffect(() => {
@@ -60,6 +49,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [router])
 
+  const connectedCount = status ? [status.youtube, status.instagram, status.tiktok].filter(Boolean).length : 0
+  const email = status?.youtube?.email ?? null
+
   return (
     <div
       className="app"
@@ -70,8 +62,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         isMobile={isMobile}
         onToggle={() => setNavOpen(v => !v)}
         pathname={pathname}
-        account={account}
-        onSwitchSlot={switchSlot}
+        connectedCount={connectedCount}
+        email={email}
       />
 
       {/* Backdrop for mobile sidebar */}

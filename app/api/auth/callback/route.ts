@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { encryptAccount, COOKIE_OPTS, toAccountSlot } from '@/lib/accounts'
+import { saveGoogleAccount } from '@/lib/connections'
+import { getBaseUrl } from '@/lib/oauth'
 
 export async function GET(req: NextRequest) {
+  const base = getBaseUrl(req)
   const code = req.nextUrl.searchParams.get('code')
-  const slot = toAccountSlot(req.nextUrl.searchParams.get('state'))
+  const error = req.nextUrl.searchParams.get('error')
 
-  if (!code) return NextResponse.redirect(new URL('/settings?error=no_code', req.url))
+  if (error || !code) {
+    return NextResponse.redirect(new URL(`/settings?yt_error=${encodeURIComponent(error ?? 'no_code')}`, req.url))
+  }
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -14,13 +18,13 @@ export async function GET(req: NextRequest) {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback`,
+      redirect_uri: `${base}/api/auth/callback`,
       grant_type: 'authorization_code',
     }),
   })
   const tokens = await tokenRes.json()
   if (!tokens.access_token) {
-    return NextResponse.redirect(new URL(`/settings?error=token_exchange`, req.url))
+    return NextResponse.redirect(new URL(`/settings?yt_error=${encodeURIComponent(tokens.error_description ?? 'token_exchange')}`, req.url))
   }
 
   const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -28,18 +32,12 @@ export async function GET(req: NextRequest) {
   })
   const user = await userRes.json()
 
-  const encrypted = encryptAccount({
+  await saveGoogleAccount({
     email: user.email,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600),
   })
 
-  const response = NextResponse.redirect(new URL('/settings', req.url))
-  response.cookies.set(`cms_${slot}`, encrypted, COOKIE_OPTS)
-  // Always reset to personal on account connect and clear the explicit-switch flag
-  // so the next page load starts on personal regardless of prior cookie state.
-  response.cookies.set('cms_active', 'personal', COOKIE_OPTS)
-  response.cookies.delete('cms_switched')
-  return response
+  return NextResponse.redirect(new URL('/settings?yt_connected=1', req.url))
 }
