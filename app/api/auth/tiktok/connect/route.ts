@@ -9,9 +9,14 @@ export async function GET(req: NextRequest) {
   }
 
   const redirectUri = `${getBaseUrl(req)}/api/auth/tiktok/callback`
+  // Only request scopes your TikTok app has actually been granted, otherwise
+  // TikTok rejects the login with a "scope" error. The default is the minimal
+  // set needed to post. Add "video.list" (for analytics) via TIKTOK_SCOPES only
+  // once your app is approved for it.
+  const scope = process.env.TIKTOK_SCOPES?.trim() || 'user.info.basic,video.publish,video.upload'
   const params = new URLSearchParams({
     client_key: process.env.TIKTOK_CLIENT_KEY,
-    scope: 'video.publish,video.upload,video.list,user.info.basic',
+    scope,
     response_type: 'code',
     redirect_uri: redirectUri,
     // Always show the account chooser so reconnecting can switch accounts.

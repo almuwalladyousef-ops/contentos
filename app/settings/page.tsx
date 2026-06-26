@@ -92,6 +92,8 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<ConnectionsStatus | null>(null)
   const [disconnecting, setDisconnecting] = useState<Platform | null>(null)
+  const [origin, setOrigin] = useState('')
+  const [copied, setCopied] = useState('')
 
   const banners: { ok: boolean; msg: string }[] = []
   const pushBanner = (connectedKey: string, errorKey: string, label: string) => {
@@ -110,13 +112,30 @@ function SettingsContent() {
       .catch(() => {})
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    setOrigin(window.location.origin)
+  }, [])
+
+  async function copy(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      setTimeout(() => setCopied(''), 1500)
+    } catch { /* ignore */ }
+  }
 
   const connectUrl: Record<Platform, string> = {
     youtube: '/api/auth/connect',
     instagram: '/api/auth/instagram/connect',
     tiktok: '/api/auth/tiktok/connect',
   }
+
+  const redirectUris: { label: string; path: string; where: string }[] = [
+    { label: 'Google', path: '/api/auth/callback', where: 'Google Cloud → Credentials → OAuth client → Authorized redirect URIs' },
+    { label: 'Instagram', path: '/api/auth/instagram/callback', where: 'Meta app → Facebook Login → Settings → Valid OAuth Redirect URIs' },
+    { label: 'TikTok', path: '/api/auth/tiktok/callback', where: 'TikTok app → Login Kit → Redirect URI' },
+  ]
 
   function connect(platform: Platform) {
     window.location.href = connectUrl[platform]
@@ -208,6 +227,36 @@ function SettingsContent() {
         icon={<LogoTikTok size={20} />}
         color="oklch(0.85 0.15 200)"
       />
+
+      {/* Developer setup — redirect URIs to register */}
+      <SectionHead eyebrow="One-time developer setup" title="Redirect URIs to register" />
+      <div style={{ fontSize: 12.5, color: 'var(--text-mute)', marginTop: -8 }}>
+        If a Connect button shows “URL Blocked” or a scope error, the platform’s developer
+        console is missing this exact callback URL. Copy each into the place noted, then retry.
+      </div>
+      <div className="card" style={{ padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {redirectUris.map(({ label, path, where }) => {
+          const uri = origin ? `${origin}${path}` : path
+          return (
+            <div key={label}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span className="micro">{label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <code className="mono" style={{
+                  flex: 1, minWidth: 0, fontSize: 12, padding: '7px 10px', borderRadius: 8,
+                  background: 'var(--bg-2)', border: '1px solid var(--hairline)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{uri}</code>
+                <button className="btn tiny" onClick={() => copy(uri, label)} style={{ flexShrink: 0 }}>
+                  {copied === label ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-mute)', marginTop: 4 }}>{where}</div>
+            </div>
+          )
+        })}
+      </div>
 
       {/* Footer note */}
       <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
