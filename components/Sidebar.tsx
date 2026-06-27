@@ -7,7 +7,6 @@ import {
   IconHistory,
   IconSettings,
   IconSidebar,
-  IconCommand,
 } from './Icons'
 
 interface SidebarProps {
@@ -219,25 +218,13 @@ export default function Sidebar({ navOpen, isMobile, onToggle, pathname, connect
 
 function Logo() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{
-        width: 26, height: 26,
-        borderRadius: 7,
-        background: 'linear-gradient(135deg, var(--accent), oklch(0.65 0.18 280))',
-        display: 'grid', placeItems: 'center',
-        boxShadow: '0 4px 14px var(--accent-glow), 0 1px 0 oklch(1 0 0 / 0.2) inset',
-        flexShrink: 0,
-      }}>
-        <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'oklch(0.18 0.013 255)' }}>C</span>
-      </div>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1 }}>ContentOS Flames</div>
-        <div
-          className="mono"
-          style={{ fontSize: 9.5, color: 'var(--text-mute)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}
-        >
-          v0.2 · preview
-        </div>
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: 0, lineHeight: 1 }}>ContentOS Flames</div>
+      <div
+        className="mono"
+        style={{ fontSize: 9.5, color: 'var(--text-mute)', letterSpacing: 0, textTransform: 'uppercase', marginTop: 3 }}
+      >
+        v0.2 · preview
       </div>
     </div>
   )
