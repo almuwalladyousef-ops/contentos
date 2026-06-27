@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBaseUrl } from '@/lib/oauth'
+import { revokeTikTokToken } from '@/lib/connections'
 
 export async function GET(req: NextRequest) {
   if (!process.env.TIKTOK_CLIENT_KEY) {
@@ -7,6 +8,10 @@ export async function GET(req: NextRequest) {
       new URL(`/settings?tt_error=${encodeURIComponent('TikTok app not configured. Set TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET.')}`, req.url)
     )
   }
+
+  // Revoke any existing authorization so TikTok re-prompts for the account
+  // (otherwise "Switch account" / reconnect silently re-picks the same one).
+  await revokeTikTokToken()
 
   const redirectUri = `${getBaseUrl(req)}/api/auth/tiktok/callback`
   // Only request scopes your TikTok app has actually been granted, otherwise
@@ -19,8 +24,10 @@ export async function GET(req: NextRequest) {
     scope,
     response_type: 'code',
     redirect_uri: redirectUri,
-    // Always show the account chooser so reconnecting can switch accounts.
+    // Force the login/account screen and stop TikTok from auto-approving a
+    // previously-authorized account, so you can pick/switch accounts.
     force_login: 'true',
+    disable_auto_auth: '1',
   })
 
   return NextResponse.redirect(`https://www.tiktok.com/v2/auth/authorize/?${params}`)

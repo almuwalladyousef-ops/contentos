@@ -199,6 +199,28 @@ async function refreshTikTokToken(conn: TikTokConnection): Promise<TikTokConnect
   }
 }
 
+/**
+ * Tells TikTok to forget this app's authorization for the stored account, so the
+ * next connect shows the account picker / consent again instead of silently
+ * re-approving the same account. Best-effort.
+ */
+export async function revokeTikTokToken(): Promise<void> {
+  const conn = await readCookie<TikTokConnection>(TIKTOK_COOKIE)
+  if (!conn?.access_token) return
+  if (!process.env.TIKTOK_CLIENT_KEY || !process.env.TIKTOK_CLIENT_SECRET) return
+  try {
+    await fetch('https://open.tiktokapis.com/v2/oauth/revoke/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: process.env.TIKTOK_CLIENT_KEY,
+        client_secret: process.env.TIKTOK_CLIENT_SECRET,
+        token: conn.access_token,
+      }),
+    })
+  } catch { /* best effort */ }
+}
+
 export async function getTikTokConnection(): Promise<{
   accessToken: string
   displayName?: string

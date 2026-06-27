@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { clearGoogleAccount, clearInstagramConnection, clearTikTokConnection } from '@/lib/connections'
+import { clearGoogleAccount, clearInstagramConnection, clearTikTokConnection, revokeTikTokToken } from '@/lib/connections'
 
 export async function POST(req: NextRequest) {
   const { platform } = await req.json()
@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       await clearInstagramConnection()
       break
     case 'tiktok':
+      await revokeTikTokToken()
       await clearTikTokConnection()
       break
     default:
