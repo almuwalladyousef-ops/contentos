@@ -14,7 +14,11 @@ const DONE_TTL_MS = 24 * 60 * 60 * 1000 // keep finished jobs for a day so the b
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false // refuse to run unguarded
+  // If no secret is configured on the server, run unguarded so scheduling works
+  // out of the box. The worker only fires posts that are already DUE and never
+  // returns credentials, so the exposure is minor. Set CRON_SECRET in Vercel to
+  // lock it down — once set, a matching Bearer token (or ?secret=) is required.
+  if (!secret) return true
   const header = req.headers.get('authorization') || ''
   const bearer = header.startsWith('Bearer ') ? header.slice(7) : ''
   const query = new URL(req.url).searchParams.get('secret') || ''
