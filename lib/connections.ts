@@ -46,8 +46,55 @@ export const COOKIE_OPTS = {
   path: '/',
 }
 
-async function readCookie<T>(name: string): Promise<T | null> {
+// ── Workspaces ───────────────────────────────────────────────────────────────
+//
+// A workspace is an independent set of platform connections. Switching the
+// active workspace swaps which encrypted cookies the connection helpers read
+// and write. The "default" workspace uses the original un-suffixed cookie
+// names, so connections made before workspaces existed keep working.
+
+const WORKSPACES_COOKIE = 'cms_workspaces'
+export const DEFAULT_WORKSPACE_ID = 'default'
+
+export interface Workspace {
+  id: string
+  name: string
+}
+
+export interface WorkspaceState {
+  workspaces: Workspace[]
+  activeId: string
+}
+
+type Jar = Awaited<ReturnType<typeof cookies>>
+
+function defaultWorkspaceState(): WorkspaceState {
+  return { workspaces: [{ id: DEFAULT_WORKSPACE_ID, name: 'Workspace 1' }], activeId: DEFAULT_WORKSPACE_ID }
+}
+
+function readWorkspaceState(jar: Jar): WorkspaceState {
+  const val = jar.get(WORKSPACES_COOKIE)?.value
+  if (val) {
+    try {
+      const parsed = JSON.parse(decrypt(val)) as WorkspaceState
+      if (parsed?.workspaces?.length && parsed.activeId) {
+        // Make sure the active id actually exists; otherwise fall back.
+        if (parsed.workspaces.some(w => w.id === parsed.activeId)) return parsed
+        return { ...parsed, activeId: parsed.workspaces[0].id }
+      }
+    } catch { /* fall through */ }
+  }
+  return defaultWorkspaceState()
+}
+
+/** Scopes a base cookie name to a workspace. Default workspace keeps the bare name. */
+function scopedName(base: string, workspaceId: string): string {
+  return workspaceId === DEFAULT_WORKSPACE_ID ? base : `${base}__${workspaceId}`
+}
+
+async function readCookie<T>(base: string): Promise<T | null> {
   const jar = await cookies()
+  const name = scopedName(base, readWorkspaceState(jar).activeId)
   const val = jar.get(name)?.value
   if (!val) return null
   try {
@@ -57,13 +104,15 @@ async function readCookie<T>(name: string): Promise<T | null> {
   }
 }
 
-async function writeCookie(name: string, value: unknown): Promise<void> {
+async function writeCookie(base: string, value: unknown): Promise<void> {
   const jar = await cookies()
+  const name = scopedName(base, readWorkspaceState(jar).activeId)
   jar.set(name, encrypt(JSON.stringify(value)), COOKIE_OPTS)
 }
 
-async function clearCookie(name: string): Promise<void> {
+async function clearCookie(base: string): Promise<void> {
   const jar = await cookies()
+  const name = scopedName(base, readWorkspaceState(jar).activeId)
   jar.set(name, '', { ...COOKIE_OPTS, maxAge: 0 })
 }
 
@@ -248,8 +297,9 @@ export async function getConnectionsStatus(): Promise<{
   tiktok: { displayName: string | null } | null
 }> {
   const jar = await cookies()
-  const read = <T>(name: string): T | null => {
-    const val = jar.get(name)?.value
+  const activeId = readWorkspaceState(jar).activeId
+  const read = <T>(base: string): T | null => {
+    const val = jar.get(scopedName(base, activeId))?.value
     if (!val) return null
     try {
       return JSON.parse(decrypt(val)) as T
@@ -267,4 +317,79 @@ export async function getConnectionsStatus(): Promise<{
     instagram: ig?.access_token && ig?.account_id ? { username: ig.username ?? null } : null,
     tiktok: tt?.access_token ? { displayName: tt.display_name ?? null } : null,
   }
+}
+
+// ── Workspace management ─────────────────────────────────────────────────────
+
+/** All per-platform connection cookie bases, used when wiping a workspace. */
+const CONNECTION_COOKIE_BASES = [GOOGLE_COOKIE, INSTAGRAM_COOKIE, TIKTOK_COOKIE]
+
+export async function getWorkspaces(): Promise<WorkspaceState> {
+  const jar = await cookies()
+  return readWorkspaceState(jar)
+}
+
+async function saveWorkspaceState(state: WorkspaceState): Promise<void> {
+  const jar = await cookies()
+  jar.set(WORKSPACES_COOKIE, encrypt(JSON.stringify(state)), COOKIE_OPTS)
+}
+
+/** Creates a new workspace and makes it active. Returns the updated state. */
+export async function createWorkspace(name?: string): Promise<WorkspaceState> {
+  const state = await getWorkspaces()
+  const id = randomBytes(8).toString('hex')
+  const trimmed = name?.trim()
+  const workspace: Workspace = {
+    id,
+    name: trimmed || `Workspace ${state.workspaces.length + 1}`,
+  }
+  const next: WorkspaceState = {
+    workspaces: [...state.workspaces, workspace],
+    activeId: id,
+  }
+  await saveWorkspaceState(next)
+  return next
+}
+
+export async function renameWorkspace(id: string, name: string): Promise<WorkspaceState> {
+  const state = await getWorkspaces()
+  const trimmed = name.trim()
+  if (!trimmed) return state
+  const next: WorkspaceState = {
+    ...state,
+    workspaces: state.workspaces.map(w => (w.id === id ? { ...w, name: trimmed } : w)),
+  }
+  await saveWorkspaceState(next)
+  return next
+}
+
+export async function switchWorkspace(id: string): Promise<WorkspaceState> {
+  const state = await getWorkspaces()
+  if (!state.workspaces.some(w => w.id === id)) return state
+  const next: WorkspaceState = { ...state, activeId: id }
+  await saveWorkspaceState(next)
+  return next
+}
+
+/**
+ * Deletes a workspace along with its stored connections. Refuses to delete the
+ * last remaining workspace. If the deleted workspace was active, the first
+ * remaining workspace becomes active.
+ */
+export async function deleteWorkspace(id: string): Promise<WorkspaceState> {
+  const state = await getWorkspaces()
+  if (state.workspaces.length <= 1) return state
+  if (!state.workspaces.some(w => w.id === id)) return state
+
+  // Wipe this workspace's connection cookies.
+  const jar = await cookies()
+  for (const base of CONNECTION_COOKIE_BASES) {
+    jar.set(scopedName(base, id), '', { ...COOKIE_OPTS, maxAge: 0 })
+  }
+
+  const workspaces = state.workspaces.filter(w => w.id !== id)
+  const activeId = state.activeId === id ? workspaces[0].id : state.activeId
+  const next: WorkspaceState = { workspaces, activeId }
+  await saveWorkspaceState(next)
+  return next
 }

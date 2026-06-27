@@ -8,6 +8,7 @@ import {
   IconSettings,
   IconSidebar,
 } from './Icons'
+import WorkspaceSwitcher from './WorkspaceSwitcher'
 
 interface SidebarProps {
   navOpen: boolean
@@ -92,6 +93,9 @@ export default function Sidebar({ navOpen, isMobile, onToggle, pathname, connect
           <IconSidebar size={15} />
         </button>
       </div>
+
+      {/* Workspace switcher */}
+      <WorkspaceSwitcher />
 
       {/* Nav */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
