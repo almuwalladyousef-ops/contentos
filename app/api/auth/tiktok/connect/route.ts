@@ -24,10 +24,9 @@ export async function GET(req: NextRequest) {
     scope,
     response_type: 'code',
     redirect_uri: redirectUri,
-    // Force the login/account screen and stop TikTok from auto-approving a
-    // previously-authorized account, so you can pick/switch accounts.
+    // Show the login/account screen on reconnect. The revoke above is what
+    // actually lets you switch accounts (TikTok otherwise re-approves silently).
     force_login: 'true',
-    disable_auto_auth: '1',
   })
 
   return NextResponse.redirect(`https://www.tiktok.com/v2/auth/authorize/?${params}`)
