@@ -164,6 +164,12 @@ export default function PostPage() {
   const [suggestedCaptions, setSuggestedCaptions] = useState<string[]>([])
   const [suggestedHashtags, setSuggestedHashtags] = useState<string[]>([])
   const [suggestedYtTitles, setSuggestedYtTitles] = useState<string[]>([])
+  // Scheduling
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduling, setScheduling] = useState(false)
+  const [scheduledMsg, setScheduledMsg] = useState('')
 
   useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__uploadRunning = running
@@ -314,6 +320,75 @@ export default function PostPage() {
       await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', entry: { id: crypto.randomUUID(), date: new Date().toISOString(), video_name: file.name, platforms, caption, youtube_url: ytUrl ?? undefined, instagram_url: igUrl ?? undefined } }) }).catch(() => {})
     }
     setRunning(false)
+  }
+
+  function openSchedule() {
+    if (!file || enabledCount === 0) return
+    // Default to ~1 hour from now, rounded to the next 5 minutes.
+    const d = new Date(Date.now() + 60 * 60 * 1000)
+    d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    setScheduleDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`)
+    setScheduleTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`)
+    setScheduledMsg('')
+    setScheduleOpen(true)
+  }
+
+  async function handleSchedule() {
+    if (!file || !scheduleDate || !scheduleTime) return
+    const when = new Date(`${scheduleDate}T${scheduleTime}`)
+    if (isNaN(when.getTime())) { setScheduledMsg('Pick a valid date and time'); return }
+    if (when.getTime() < Date.now() - 60_000) { setScheduledMsg('That time is in the past'); return }
+
+    setScheduling(true)
+    setScheduledMsg('Uploading video…')
+    try {
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase()
+      const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+      let lastPct = -1
+      const blob = await upload(safeName, file, {
+        access: 'public',
+        handleUploadUrl: '/api/blob/upload',
+        onUploadProgress: ({ percentage }: { percentage: number }) => {
+          const pct = Math.round(percentage)
+          if (pct >= lastPct + 5 || pct === 100) { lastPct = pct; setScheduledMsg(`Uploading ${pct}%…`) }
+        },
+      })
+
+      setScheduledMsg('Saving schedule…')
+      const res = await fetch('/api/schedule', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scheduledAt: when.toISOString(),
+          videoType,
+          platforms: enabled,
+          blobUrl: blob.url,
+          fileName: file.name,
+          size: file.size,
+          type: file.type || 'video/mp4',
+          caption,
+          ytCaption,
+          hashtags,
+          privacy,
+          ttPrivacy,
+        }),
+      })
+      const data = await safeJson(res)
+      if (data.error) { setScheduledMsg(data.error); setScheduling(false); return }
+
+      const niceWhen = when.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      setScheduling(false)
+      setScheduleOpen(false)
+      setScheduledMsg('')
+      setStatuses(initialStatus())
+      // Surface confirmation in the action bar.
+      ;(window as unknown as Record<string, unknown>).__lastScheduled = niceWhen
+      alert(`Scheduled for ${niceWhen}. It will post automatically and appear in Content OS under "Scheduled".`)
+      setFile(null)
+    } catch (e) {
+      setScheduledMsg(`Schedule failed: ${String(e)}`)
+      setScheduling(false)
+    }
   }
 
   const enabledCount = Object.values(enabled).filter(Boolean).length
@@ -586,7 +661,7 @@ export default function PostPage() {
           )}
           <div className="post-actions-buttons" style={{ marginLeft: 'auto', alignItems: 'center', gap: 8 }}>
             <button className="btn ghost" disabled={running}>Save as draft</button>
-            <button className="btn ghost" disabled={running}><IconClock size={14} /> Schedule</button>
+            <button className="btn ghost" disabled={running || scheduling || !file || enabledCount === 0} onClick={openSchedule}><IconClock size={14} /> Schedule</button>
             <button className="btn primary big" disabled={!file || running || enabledCount === 0} onClick={handlePostAll}>
               {running ? (
                 <><span style={{ width: 14, height: 14, borderRadius: 999, border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 700ms linear infinite', display: 'inline-block' }} /> Posting…</>
@@ -596,6 +671,61 @@ export default function PostPage() {
             </button>
           </div>
         </div>
+
+        {/* Schedule modal */}
+        {scheduleOpen && (
+          <div
+            onClick={() => !scheduling && setScheduleOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 50,
+              background: 'oklch(0 0 0 / 0.55)', backdropFilter: 'blur(4px)',
+              display: 'grid', placeItems: 'center', padding: 16,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              className="card"
+              style={{ width: '100%', maxWidth: 380, padding: 'var(--pad)', display: 'flex', flexDirection: 'column', gap: 14 }}
+            >
+              <div>
+                <div className="micro" style={{ marginBottom: 4 }}>Auto-post</div>
+                <h2 className="h1" style={{ fontSize: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconClock size={18} /> Schedule this post
+                </h2>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="micro">Date</span>
+                  <input type="date" className="textarea" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} style={{ fontSize: 14, padding: '9px 10px' }} />
+                </label>
+                <label style={{ width: 130, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span className="micro">Time</span>
+                  <input type="time" className="textarea" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} style={{ fontSize: 14, padding: '9px 10px' }} />
+                </label>
+              </div>
+
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-mute)', lineHeight: 1.5 }}>
+                Posts to {enabledCount} platform{enabledCount !== 1 ? 's' : ''} at the chosen time and shows in Content OS under <span style={{ color: 'var(--text-2)' }}>Scheduled</span>. Keep Content OS running so it can fire.
+              </div>
+
+              {scheduledMsg && (
+                <div className="mono" style={{ fontSize: 11.5, color: scheduling ? 'var(--text-2)' : 'var(--bad)' }}>{scheduledMsg}</div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 2 }}>
+                <button className="btn ghost" disabled={scheduling} onClick={() => setScheduleOpen(false)}>Cancel</button>
+                <button className="btn primary" disabled={scheduling || !scheduleDate || !scheduleTime} onClick={handleSchedule}>
+                  {scheduling ? (
+                    <><span style={{ width: 13, height: 13, borderRadius: 999, border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 700ms linear infinite', display: 'inline-block' }} /> Scheduling…</>
+                  ) : (
+                    <>Schedule <IconArrowRight size={14} /></>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
     </div>
   )

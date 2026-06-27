@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
+import { randomBytes } from 'crypto'
+import { encrypt, decrypt } from './crypto'
 
 /**
  * Unified connection store for ContentOS.
@@ -13,30 +14,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
  */
 
 // ── crypto ──────────────────────────────────────────────────────────────────
-
-function getKey(): Buffer {
-  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''
-  if (!secret) {
-    throw new Error('NEXTAUTH_SECRET is not set. Generate one with: openssl rand -base64 32')
-  }
-  const buf = Buffer.from(secret, 'base64')
-  return buf.length >= 32 ? buf.subarray(0, 32) : Buffer.concat([buf, Buffer.alloc(32 - buf.length)])
-}
-
-function encrypt(text: string): string {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', getKey(), iv)
-  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`
-}
-
-function decrypt(text: string): string {
-  const [ivHex, tagHex, encHex] = text.split(':')
-  const decipher = createDecipheriv('aes-256-gcm', getKey(), Buffer.from(ivHex, 'hex'))
-  decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
-  return decipher.update(Buffer.from(encHex, 'hex')).toString('utf8') + decipher.final('utf8')
-}
+// (encrypt/decrypt live in lib/crypto.ts so the schedule queue can reuse them.)
 
 export const COOKIE_OPTS = {
   httpOnly: true,
@@ -317,6 +295,48 @@ export async function getConnectionsStatus(): Promise<{
     instagram: ig?.access_token && ig?.account_id ? { username: ig.username ?? null } : null,
     tiktok: tt?.access_token ? { displayName: tt.display_name ?? null } : null,
   }
+}
+
+// ── Raw snapshots (for scheduled posts) ──────────────────────────────────────
+//
+// A scheduled post fires later from the cron worker, which has no cookies. So at
+// schedule time we snapshot the FULL stored credentials (including refresh
+// tokens) into the encrypted queue. These getters expose the raw cookie payloads
+// for that snapshot; the standalone refresh* helpers below let the worker mint
+// fresh access tokens from a snapshot without any cookie/session context.
+
+export async function getGoogleAccountRaw(): Promise<GoogleAccount | null> {
+  return readCookie<GoogleAccount>(GOOGLE_COOKIE)
+}
+
+export async function getInstagramConnectionRaw(): Promise<InstagramConnection | null> {
+  return readCookie<InstagramConnection>(INSTAGRAM_COOKIE)
+}
+
+export async function getTikTokConnectionRaw(): Promise<TikTokConnection | null> {
+  return readCookie<TikTokConnection>(TIKTOK_COOKIE)
+}
+
+/** Cookieless Google refresh — returns a fresh access token + unix-seconds expiry. */
+export async function refreshGoogleAccessToken(refreshToken: string): Promise<{ access_token: string; expires_at: number }> {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const json = await res.json()
+  if (!json.access_token) throw new Error(`Google token refresh failed: ${JSON.stringify(json)}`)
+  return { access_token: json.access_token, expires_at: now() + (json.expires_in ?? 3600) }
+}
+
+/** Cookieless TikTok refresh — returns fresh tokens (unix-ms expiry) or null. */
+export async function refreshTikTokAccessToken(refreshToken: string): Promise<TikTokConnection | null> {
+  return refreshTikTokToken({ access_token: '', refresh_token: refreshToken })
 }
 
 // ── Workspace management ─────────────────────────────────────────────────────
