@@ -152,7 +152,9 @@ export default function PostPage() {
   const [hashtags, setHashtags] = useState<string[]>([])
   const [enabled, setEnabled] = useState({ youtube: true, instagram: true, tiktok: true })
   const [privacy, setPrivacy] = useState('public')
-  const [ttPrivacy, setTtPrivacy] = useState('PUBLIC_TO_EVERYONE')
+  // Unaudited TikTok apps can only post privately (SELF_ONLY); default to that
+  // so posting works out of the box. Switch to Public once your app is audited.
+  const [ttPrivacy, setTtPrivacy] = useState('SELF_ONLY')
   const [statuses, setStatuses] = useState<Record<Platform, PlatStatus>>(initialStatus())
   const [running, setRunning] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -550,7 +552,14 @@ export default function PostPage() {
               {videoType === 'long' ? (
                 <div style={{ color: 'var(--text-mute)', fontSize: 12, fontStyle: 'italic', padding: '8px 4px' }}>Long-form not supported.</div>
               ) : (
-                <PrivacyRadio value={ttPrivacy} onChange={setTtPrivacy} options={[['PUBLIC_TO_EVERYONE', 'Public'], ['FOLLOWER_OF_CREATOR', 'Followers'], ['SELF_ONLY', 'Only me']]} />
+                <>
+                  <PrivacyRadio value={ttPrivacy} onChange={setTtPrivacy} options={[['PUBLIC_TO_EVERYONE', 'Public'], ['FOLLOWER_OF_CREATOR', 'Followers'], ['SELF_ONLY', 'Only me']]} />
+                  {ttPrivacy !== 'SELF_ONLY' && (
+                    <div style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 8, lineHeight: 1.4 }}>
+                      Public/Followers needs your TikTok app to pass audit. Unaudited apps can only post “Only me”.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
