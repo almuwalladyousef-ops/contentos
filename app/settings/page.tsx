@@ -92,7 +92,7 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<ConnectionsStatus | null>(null)
   const [disconnecting, setDisconnecting] = useState<Platform | null>(null)
-  const [origin, setOrigin] = useState('')
+  const [origin] = useState(() => typeof window === 'undefined' ? '' : window.location.origin)
   const [copied, setCopied] = useState('')
 
   const banners: { ok: boolean; msg: string }[] = []
@@ -114,7 +114,6 @@ function SettingsContent() {
 
   useEffect(() => {
     load()
-    setOrigin(window.location.origin)
   }, [])
 
   async function copy(text: string, key: string) {

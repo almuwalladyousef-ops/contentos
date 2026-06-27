@@ -121,27 +121,6 @@ export async function writeTextFile(accessToken: string, folderId: string, filen
   return created.data.id!
 }
 
-export async function uploadTempVideo(accessToken: string, tempFolderId: string, buffer: Buffer, filename: string): Promise<string> {
-  const drive = getDriveClient(accessToken)
-  const { Readable } = await import('stream')
-  const stream = Readable.from(buffer)
-
-  const created = await drive.files.create({
-    requestBody: { name: filename, parents: [tempFolderId], mimeType: 'video/mp4' },
-    media: { mimeType: 'video/mp4', body: stream },
-    fields: 'id',
-  })
-  const fileId = created.data.id!
-
-  // Make publicly readable
-  await drive.permissions.create({
-    fileId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  })
-
-  return fileId
-}
-
 export async function deleteFile(accessToken: string, fileId: string): Promise<void> {
   const drive = getDriveClient(accessToken)
   await drive.files.delete({ fileId })

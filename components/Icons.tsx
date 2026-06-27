@@ -66,16 +66,6 @@ export const IconSidebar = (p: IconProps) => (
   </Icon>
 )
 
-export const IconCommand = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M18 6a3 3 0 1 0-3 3V6h3z" />
-    <path d="M6 18a3 3 0 1 0 3-3v3H6z" />
-    <path d="M18 18a3 3 0 1 1-3-3h3v3z" />
-    <path d="M6 6a3 3 0 1 1 3 3V6H6z" />
-    <path d="M9 9h6v6H9z" />
-  </Icon>
-)
-
 export const IconUpload = (p: IconProps) => (
   <Icon {...p}>
     <path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3" />
@@ -138,15 +128,6 @@ export const IconClipboard = (p: IconProps) => (
   </Icon>
 )
 
-export const IconKey = (p: IconProps) => (
-  <Icon {...p}>
-    <circle cx="8" cy="15" r="4" />
-    <path d="M10.8 12.2L21 2" />
-    <path d="M17 6l3 3" />
-    <path d="M15 8l3 3" />
-  </Icon>
-)
-
 export const IconShield = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -184,15 +165,6 @@ export const IconClock = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="9" />
     <path d="M12 7v5l3 2" />
-  </Icon>
-)
-
-export const IconRefresh = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-    <path d="M21 3v5h-5" />
-    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-    <path d="M3 21v-5h5" />
   </Icon>
 )
 

@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import {
   IconUpload, IconLink, IconSparkles, IconClock, IconClipboard,
-  IconArrowUp, IconExternal, IconEye, IconCheck, IconBolt, IconFilm,
+  IconArrowUp, IconExternal, IconEye, IconCheck, IconBolt,
   PlatformIcon,
 } from '@/components/Icons'
 import { VideoAnalysis, PlatformPost, PlatformMetricsData } from '@/lib/types'
@@ -46,11 +46,6 @@ function hookScore(strength: string) {
   if (strength === 'medium') return 58
   return 32
 }
-function riskScore(level: string) {
-  if (level === 'low') return 80
-  if (level === 'medium') return 57
-  return 33
-}
 function formatCount(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + 'K'
@@ -59,41 +54,6 @@ function formatCount(n: number) {
 function ratioOf(part: number, whole: number) {
   if (!whole) return '0.00'
   return ((part / whole) * 100).toFixed(2)
-}
-function finiteNumber(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
-const RETENTION_CURVES: Record<string, number[]> = {
-  high:   [100, 93, 81, 66, 57, 50, 43, 37, 32, 27, 23, 20, 17, 15, 13, 12, 11, 11, 10, 10],
-  medium: [100, 96, 89, 81, 73, 67, 62, 57, 53, 50, 47, 45, 42, 40, 38, 37, 36, 35, 35, 34],
-  low:    [100, 98, 95, 91, 86, 83, 80, 77, 75, 73, 71, 69, 67, 65, 64, 63, 62, 61, 60, 60],
-}
-
-// Build a real exponential-decay retention curve from avg watch time + duration.
-// Solves for λ in: avgWatch = (1 - e^(-λ·T)) / λ using bisection, then samples the curve.
-function buildRealRetentionCurve(avgWatchSec: number, durationSec: number, points = 20): number[] {
-  const W = Math.min(avgWatchSec, durationSec * 0.98) // cap at 98% in case of replays
-  const T = durationSec
-  if (W <= 0 || T <= 0) return RETENTION_CURVES.medium
-
-  let lo = 1e-4, hi = 30
-  for (let i = 0; i < 80; i++) {
-    const mid = (lo + hi) / 2
-    const est = (1 - Math.exp(-mid * T)) / mid
-    if (est > W) lo = mid; else hi = mid
-  }
-  const lambda = (lo + hi) / 2
-
-  return Array.from({ length: points }, (_, i) => {
-    const t = (i / (points - 1)) * T
-    return Math.round(100 * Math.exp(-lambda * t))
-  })
 }
 
 // ── Animated hook meter ───────────────────────────────────────────────────────
@@ -140,101 +100,6 @@ function HookMeter({ score = 0, strength, size = 168 }: { score?: number; streng
           <div className="micro" style={{ marginTop: 4 }}>{strength || 'score'}</div>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ── Retention sparkline ───────────────────────────────────────────────────────
-function RetentionSparkline({ curve, drops, height = 160 }: {
-  curve: number[]
-  drops: Array<{ t: number; label: string; severity: string }>
-  height?: number
-}) {
-  const [w, setW] = useState(640)
-  const ref = useRef<HTMLDivElement>(null)
-  const [progress, setProgress] = useState(0)
-
-  useEffect(() => {
-    if (!ref.current) return
-    const ro = new ResizeObserver(entries => {
-      for (const e of entries) setW(Math.floor(e.contentRect.width))
-    })
-    ro.observe(ref.current)
-    return () => ro.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const start = performance.now()
-    const dur = 1200
-    let raf: number
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - start) / dur)
-      setProgress(1 - Math.pow(1 - p, 3))
-      if (p < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  const padX = 12, padY = 14
-  const innerW = Math.max(60, w - padX * 2)
-  const innerH = height - padY * 2
-  const safeCurve = curve
-    .map(v => Math.max(0, Math.min(100, finiteNumber(v) ?? 0)))
-    .filter(v => Number.isFinite(v))
-  const drawableCurve = safeCurve.length >= 2 ? safeCurve : RETENTION_CURVES.medium
-
-  const pts = drawableCurve.map((val, i) => {
-    const x = padX + (i / (drawableCurve.length - 1)) * innerW
-    const y = padY + innerH - (val / 100) * innerH
-    return [x, y] as [number, number]
-  })
-
-  const visibleCount = Math.max(2, Math.floor(pts.length * progress))
-  const visible = pts.slice(0, visibleCount)
-  const path = visible.length ? 'M ' + visible.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L ') : ''
-  const area = visible.length ? path + ` L ${visible[visible.length - 1][0].toFixed(1)} ${padY + innerH} L ${visible[0][0].toFixed(1)} ${padY + innerH} Z` : ''
-  const grids = [0, 25, 50, 75, 100]
-
-  return (
-    <div ref={ref} style={{ width: '100%', position: 'relative' }}>
-      <svg width={w} height={height} style={{ display: 'block' }}>
-        <defs>
-          <linearGradient id="retFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {grids.map(g => {
-          const y = padY + innerH - (g / 100) * innerH
-          return (
-            <g key={g}>
-              <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="var(--hairline)" strokeDasharray="2 4" />
-              <text x={w - padX + 4} y={y + 4} fontSize="9" fill="var(--text-mute)" fontFamily="var(--font-mono)">{g}</text>
-            </g>
-          )
-        })}
-        {visible.length > 0 && (
-          <>
-            <path d={area} fill="url(#retFill)" />
-            <path d={path} stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </>
-        )}
-        {drops.map((d, i) => {
-          const idx = Math.floor(d.t * (drawableCurve.length - 1))
-          if (idx >= visibleCount) return null
-          const [x, y] = pts[idx]
-          const color = d.severity === 'high' ? 'var(--bad)' : 'var(--warn)'
-          return (
-            <g key={i}>
-              <line x1={x} y1={padY} x2={x} y2={padY + innerH} stroke={color} strokeOpacity="0.25" strokeDasharray="2 3" />
-              <circle cx={x} cy={y} r="5" fill="var(--bg)" stroke={color} strokeWidth="2" />
-              <circle cx={x} cy={y} r="2" fill={color} />
-            </g>
-          )
-        })}
-        <line x1={padX} y1={padY + innerH} x2={w - padX} y2={padY + innerH} stroke="var(--border)" />
-      </svg>
     </div>
   )
 }
@@ -575,119 +440,6 @@ function VerdictCard({ analysis }: { analysis: VideoAnalysis }) {
   )
 }
 
-function RetentionCard({ analysis, metrics, retentionError }: { analysis: VideoAnalysis; metrics?: PlatformMetricsData | null; retentionError?: string }) {
-  const r = analysis.retention_risk
-  const riskColor = r.risk_level === 'high' ? 'var(--bad)' : r.risk_level === 'medium' ? 'var(--warn)' : 'var(--ok)'
-  const score = riskScore(r.risk_level)
-
-  // YouTube Analytics: use real retention curve directly
-  const hasYTCurve = !!(metrics?.retentionCurve?.length)
-  // Instagram: compute exponential decay from avg watch time + duration
-  const avgWatchMs = finiteNumber(metrics?.avgWatchTimeMs)
-  const durationSec = finiteNumber(metrics?.videoDurationSec)
-  const avgWatchSec = avgWatchMs !== null ? avgWatchMs / 1000 : null
-  const hasIGData = !hasYTCurve && avgWatchSec !== null && durationSec !== null && durationSec > 0
-  const hasRealData = hasYTCurve || hasIGData
-
-  const avgPct = hasYTCurve
-    ? (metrics?.avgRetentionPct ?? null)
-    : hasIGData ? Math.min(100, Math.round((avgWatchSec! / durationSec!) * 100)) : null
-
-  const curve = hasYTCurve
-    ? metrics!.retentionCurve!
-    : hasIGData
-      ? buildRealRetentionCurve(avgWatchSec!, durationSec!)
-      : RETENTION_CURVES[r.risk_level] ?? RETENTION_CURVES.medium
-
-  const dataSource = hasYTCurve ? 'YouTube Analytics' : hasIGData ? 'Instagram Insights' : null
-
-  const fakeDrops = r.drop_off_points.slice(0, 3).map((text, i) => ({
-    t: 0.2 + i * 0.28,
-    label: text,
-    severity: i === 0 ? 'high' : 'medium',
-  }))
-
-  return (
-    <div className="card" style={{ padding: 'var(--pad)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div className="micro" style={{ marginBottom: 4 }}>
-            retention curve · {dataSource ? `real · ${dataSource}` : 'AI estimate'}
-          </div>
-          <h2 className="h2">Watch-through</h2>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {hasRealData && avgPct !== null && (
-            <span className="pill ok" style={{ gap: 6 }}>
-              <span className="dot" style={{ background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)' }} />
-              avg {avgPct}%{hasIGData && avgWatchSec !== null && durationSec !== null ? ` · ${avgWatchSec.toFixed(1)}s / ${durationSec}s` : ' watched'}
-            </span>
-          )}
-          <span className="pill" style={{
-            background: `oklch(from ${riskColor} l c h / 0.12)`,
-            borderColor: `oklch(from ${riskColor} l c h / 0.4)`,
-            color: riskColor,
-          }}>
-            <span className="dot" style={{ background: riskColor, boxShadow: `0 0 8px ${riskColor}` }} />
-            {r.risk_level} risk · {score}/100
-          </span>
-        </div>
-      </div>
-      {!hasRealData && (
-        <div style={{
-          marginBottom: 14, padding: '8px 12px', borderRadius: 8,
-          background: 'oklch(0.82 0.15 80 / 0.07)', border: '1px solid oklch(0.82 0.15 80 / 0.2)',
-          display: 'flex', alignItems: 'flex-start', gap: 8,
-        }}>
-          <span style={{ fontSize: 13, color: 'var(--accent)', flexShrink: 0, marginTop: 1 }}>⚠</span>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6 }}>
-            <div>Showing AI estimate ({r.risk_level} risk) — no real watch-time data.</div>
-            {retentionError && (
-              <div style={{ marginTop: 4, color: 'var(--bad)' }}>API error: {retentionError}</div>
-            )}
-            {!retentionError && metrics?.platform === 'instagram' && (() => {
-              const missing = []
-              if (avgWatchMs === null) missing.push('avg_watch_time')
-              if (durationSec === null) missing.push('video_duration')
-              return <div style={{ marginTop: 4 }}>Instagram didn&apos;t return: {missing.join(', ')}. This can happen if the post has too few views or if the token needs to be reconnected in Settings.</div>
-            })()}
-          </div>
-        </div>
-      )}
-      <RetentionSparkline curve={curve} drops={fakeDrops} height={200} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>0:00</span>
-        <span className="mono" style={{ fontSize: 10, color: 'var(--text-mute)' }}>end</span>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--hairline)' }}>
-        <div>
-          <div className="micro" style={{ marginBottom: 10 }}>Drop-off moments</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {r.drop_off_points.map((text, i) => {
-              const color = i === 0 ? 'var(--bad)' : 'var(--warn)'
-              return (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10,
-                  padding: '8px 10px', borderRadius: 8,
-                  background: 'var(--bg-2)', border: '1px solid var(--hairline)',
-                }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: color, boxShadow: `0 0 6px ${color}`, marginTop: 6, flexShrink: 0 }} />
-                  <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{text}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div>
-          <div className="micro" style={{ marginBottom: 10 }}>Why this curve</div>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.65 }}>{r.reasoning}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function ViralityCard({ factors }: { analysis?: VideoAnalysis; factors: string[] }) {
   const weights = [0.85, 0.72, 0.61, 0.52, 0.44, 0.38]
   return (
@@ -822,9 +574,8 @@ function TranscriptCard({ transcript, platform }: { transcript: string; platform
 }
 
 // ── Upload pane ───────────────────────────────────────────────────────────────
-function UploadPane({ file, fileRef, onBrowse, onRun, running, stage, isLarge }: {
+function UploadPane({ file, onBrowse, onRun, running, stage, isLarge }: {
   file: File | null
-  fileRef: React.RefObject<HTMLInputElement | null>
   onBrowse: () => void
   onRun: () => void
   running: boolean
@@ -1135,7 +886,6 @@ export default function AnalysisPage() {
             />
             <UploadPane
               file={file}
-              fileRef={fileRef}
               onBrowse={() => fileRef.current?.click()}
               onRun={handleUploadRun}
               running={running}

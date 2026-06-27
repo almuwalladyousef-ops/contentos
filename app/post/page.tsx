@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { upload } from '@vercel/blob/client'
 import StatusDot from '@/components/StatusDot'
 import {
   IconUpload, IconFilm, IconX, IconArrowRight, IconClock,
-  IconCheck, IconSparkles, LogoYouTube, PlatformIcon,
+  IconSparkles, LogoYouTube, PlatformIcon,
 } from '@/components/Icons'
 import { PostStatus } from '@/lib/types'
 
@@ -99,9 +99,9 @@ const PLATFORM_META = {
   tiktok:    { name: 'TikTok',    color: 'oklch(0.85 0.15 200)' },
 }
 
-function PlatformToggle({ platform, enabled, locked, onToggle, status, detail }: {
+function PlatformToggle({ platform, enabled, locked, onToggle, detail }: {
   platform: Platform; enabled: boolean; locked: boolean
-  onToggle: () => void; status: PostStatus; detail: string
+  onToggle: () => void; detail: string
 }) {
   const meta = PLATFORM_META[platform]
   return (
@@ -166,14 +166,6 @@ export default function PostPage() {
   const [suggestedYtTitles, setSuggestedYtTitles] = useState<string[]>([])
 
   useEffect(() => {
-    if (videoType === 'long') {
-      setEnabled({ youtube: true, instagram: false, tiktok: false })
-    } else {
-      setEnabled({ youtube: true, instagram: true, tiktok: true })
-    }
-  }, [videoType])
-
-  useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__uploadRunning = running
     if (!running) return
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
@@ -184,6 +176,14 @@ export default function PostPage() {
   function togglePlatform(p: Platform) {
     if (videoType === 'long' && p !== 'youtube') return
     setEnabled(e => ({ ...e, [p]: !e[p] }))
+  }
+
+  function selectVideoType(nextType: VideoType) {
+    setVideoType(nextType)
+    setEnabled(nextType === 'long'
+      ? { youtube: true, instagram: false, tiktok: false }
+      : { youtube: true, instagram: true, tiktok: true }
+    )
   }
 
   function setStatus(p: Platform, state: PostStatus, message = '') {
@@ -353,7 +353,7 @@ export default function PostPage() {
             ] as { id: VideoType; label: string; sub: string; icon: React.ReactNode }[]).map(t => {
               const active = videoType === t.id
               return (
-                <button key={t.id} onClick={() => setVideoType(t.id)} style={{
+                <button key={t.id} onClick={() => selectVideoType(t.id)} style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10,
                   background: active ? 'var(--surface-2)' : 'transparent',
                   border: `1px solid ${active ? 'var(--border-strong)' : 'transparent'}`,
@@ -530,9 +530,9 @@ export default function PostPage() {
             {videoType === 'long' && <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-mute)' }}>long-form · YouTube only</span>}
           </div>
           <div className="platform-grid-3" style={{ gap: 12 }}>
-            <PlatformToggle platform="youtube"   enabled={enabled.youtube}   locked={false}                        onToggle={() => togglePlatform('youtube')}   status={statuses.youtube.state}   detail={`${videoType === 'long' ? 'Video' : 'Shorts'} · ${privacy}`} />
-            <PlatformToggle platform="instagram" enabled={enabled.instagram} locked={videoType === 'long'}          onToggle={() => togglePlatform('instagram')} status={statuses.instagram.state} detail="public" />
-            <PlatformToggle platform="tiktok"    enabled={enabled.tiktok}    locked={videoType === 'long'}          onToggle={() => togglePlatform('tiktok')}    status={statuses.tiktok.state}    detail={ttPrivacy === 'PUBLIC_TO_EVERYONE' ? 'public' : ttPrivacy === 'FOLLOWER_OF_CREATOR' ? 'followers' : 'only me'} />
+            <PlatformToggle platform="youtube"   enabled={enabled.youtube}   locked={false}                        onToggle={() => togglePlatform('youtube')}   detail={`${videoType === 'long' ? 'Video' : 'Shorts'} · ${privacy}`} />
+            <PlatformToggle platform="instagram" enabled={enabled.instagram} locked={videoType === 'long'}          onToggle={() => togglePlatform('instagram')} detail="public" />
+            <PlatformToggle platform="tiktok"    enabled={enabled.tiktok}    locked={videoType === 'long'}          onToggle={() => togglePlatform('tiktok')}    detail={ttPrivacy === 'PUBLIC_TO_EVERYONE' ? 'public' : ttPrivacy === 'FOLLOWER_OF_CREATOR' ? 'followers' : 'only me'} />
           </div>
 
           {/* Privacy details */}
